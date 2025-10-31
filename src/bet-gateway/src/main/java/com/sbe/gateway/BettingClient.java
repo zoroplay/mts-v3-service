@@ -3,10 +3,10 @@ package com.sbe.gateway;
 import io.grpc.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import protobuf.BettingGrpc;
-import protobuf.GeneralAck;
-import protobuf.MTSConnectionStatus;
-import protobuf.MTSResponse;
+import com.sbe.gateway.bettingsvc.BettingServiceGrpc;
+import com.sbe.gateway.bettingsvc.GeneralAck;
+import com.sbe.gateway.bettingsvc.MTSConnectionStatus;
+import com.sbe.gateway.bettingsvc.MTSResponse;
 
 import java.util.concurrent.TimeUnit;
 
@@ -14,7 +14,7 @@ public class BettingClient implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(BettingClient.class);
 
     private final ManagedChannel channel;
-    private final BettingGrpc.BettingBlockingStub blocking;
+    private final BettingServiceGrpc.BettingServiceBlockingStub blocking;
 
     public BettingClient() {
         String host = System.getenv("BETTING_SERVICE_HOST");
@@ -26,7 +26,11 @@ public class BettingClient implements AutoCloseable {
         ManagedChannelBuilder<?> b = Grpc.newChannelBuilderForAddress(host, port, InsecureChannelCredentials.create());
 //        if (!useTls) b.usePlaintext();
         this.channel = b.build();
-        this.blocking = BettingGrpc.newBlockingStub(channel);
+
+        // Attach the interceptor to log method names and status
+        Channel intercepted = ClientInterceptors.intercept(channel, new ClientLoggingInterceptor());
+
+        this.blocking = BettingServiceGrpc.newBlockingStub(intercepted);
     }
 
     public void betAcceptedResponse(Integer code, String description, String betId) {
@@ -39,6 +43,7 @@ public class BettingClient implements AutoCloseable {
     }
 
     public void betCancelledResponse(Integer code, String description,String betId) {
+        log.info("betCancelledResponse called with betId: {}", betId);
         MTSResponse req = MTSResponse.newBuilder()
                 .setBetID(betId)
                 .setCode(code)
@@ -65,12 +70,12 @@ public class BettingClient implements AutoCloseable {
         GeneralAck ack =  blocking.cancelBetRejectedResponse(req);
     }
 
-    public GeneralAck mtsConnectionChangeResponse(Integer status, String description) throws StatusRuntimeException {
+    public void mtsConnectionChangeResponse(Integer status, String description) throws StatusRuntimeException {
         MTSConnectionStatus req = MTSConnectionStatus.newBuilder()
                 .setStatus(status)
                 .setDescription(description)
                 .build();
-        return blocking.mtsConnectionChangeResponse(req);
+        GeneralAck ack =  blocking.mtsConnectionChangeResponse(req);
     }
 
     @Override

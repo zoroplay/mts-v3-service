@@ -26,7 +26,7 @@ public class App {
         sdk.connect(); // establishes the WebSocket & auth handled by SDK
 
         // Create Betting client
-        BettingClient bettingClient = null;
+        BettingClient bettingClient;
         try {
             bettingClient = new BettingClient();
         } catch (Exception e) {

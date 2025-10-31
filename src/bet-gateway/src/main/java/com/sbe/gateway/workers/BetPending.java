@@ -1,15 +1,17 @@
 package com.sbe.gateway.workers;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.sbe.gateway.BettingClient;
 import com.sbe.gateway.handlers.ResponseHandler;
 import com.sportradar.mbs.sdk.MbsSdk;
 import com.sportradar.mbs.sdk.entities.channel.Channel;
-import com.sportradar.mbs.sdk.entities.common.Bet;
-import com.sportradar.mbs.sdk.entities.common.EndCustomer;
-import com.sportradar.mbs.sdk.entities.common.TicketContext;
+import com.sportradar.mbs.sdk.entities.common.*;
 import com.sportradar.mbs.sdk.entities.odds.Odds;
 import com.sportradar.mbs.sdk.entities.request.TicketRequest;
 import com.sportradar.mbs.sdk.entities.selection.Selection;
+import com.sportradar.mbs.sdk.entities.selection.UfSelection;
 import com.sportradar.mbs.sdk.entities.stake.Stake;
 import com.sportradar.mbs.sdk.protocol.TicketProtocol;
 import org.slf4j.Logger;
@@ -20,7 +22,6 @@ import protobuf.MTSBetSlip;
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.concurrent.ExecutionException;
 
 public class BetPending implements Runnable {
 
@@ -28,6 +29,9 @@ public class BetPending implements Runnable {
     MbsSdk mbsSdk;
     BettingClient bettingClient;
     public MTSBet message;
+//    private static final ObjectMapper MAPPER = new ObjectMapper()
+//            .enable(SerializationFeature.INDENT_OUTPUT)        // pretty-print
+//            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
     public BetPending(MbsSdk mbsSdk,BettingClient bettingClient, MTSBet message){
         this.mbsSdk = mbsSdk;
         this.message = message;
@@ -63,21 +67,35 @@ public class BetPending implements Runnable {
 
         // build bets array
         Stake stake = Stake.newCashStakeBuilder()
-                .setAmount(BigDecimal.valueOf(object.getStake() * 10000)) // multiply by 10000
+                .setAmount(BigDecimal.valueOf(object.getStake()))
                 .setCurrency(mts_currency)
                 .build();
         // Create a bet builder and loop through selections
         List<Selection> selections = new ArrayList<>();
         for (int i = 0; i < object.getBetsCount(); i++) {
             MTSBetSlip slip = object.getBets(i);
-            Selection selection = Selection.newUfSelectionBuilder()
+
+            String eventUrn = "sr:match:" + slip.getMatchID();
+
+            UfSelection.Builder sb = UfSelection.newBuilder()
+                    .setEventId(eventUrn)
                     .setProductId(String.valueOf(slip.getProducerID()))
-                    .setEventId(String.valueOf(slip.getMatchID()))
                     .setMarketId(String.valueOf(slip.getMarketID()))
                     .setOutcomeId(slip.getOutcomeID())
-                    .setOdds(Odds.newDecimalOddsBuilder().setValue(BigDecimal.valueOf(slip.getOdds())).build())
-                    .build();
-            selections.add(selection);
+                    .setOdds(
+                            Odds.newDecimalOddsBuilder()
+                                    .setValue(new BigDecimal(String.valueOf(slip.getOdds())))
+                                    .build()
+                    );
+
+            // only set specifiers if market requires it
+            String specifier = slip.getSpecifier();
+            specifier = specifier.replace("?", "&");
+            if (!specifier.isBlank()) {
+                sb.setSpecifiers(specifier);
+            }
+
+            selections.add(sb.build());
         }
 
         List<Bet> bets = new ArrayList<>();
@@ -85,35 +103,33 @@ public class BetPending implements Runnable {
         Bet bet = Bet.newBuilder()
                 .setStake(stake)
                 .setSelections(selections)
-                .build();
+                .setContext(
+                        BetContext.newBuilder()
+                                .setOddsChange(OddsChange.ANY)
+                                .build()
+                ).build();
+
         bets.add(bet);
+
         TicketRequest ticketRequest = TicketRequest.newBuilder()
                 .setTicketId(ticketId)
                 .setContext(ticketContext)
                 .setBets(bets)
                 .build();
 
-        log.info("BetPending thread started: sending ticket request for ticketId: {}", ticketId);
-        try {
-            ticketProtocol.sendTicket(ticketRequest);
-            log.info("BetPending thread finished: ticketId: {}", ticketId);
+//        String json = MAPPER.writeValueAsString(ticketRequest);
+//        log.info("BetPending thread started: sending ticket request for ticketId {}:\n{}", ticketId, json);
 
-            ticketProtocol
-                    .sendTicketAsync(ticketRequest)  // returns CompletableFuture<TicketResponse>
-                    .thenAccept(resp -> {
-                        responseHandler.onTicketResponse(ticketId, resp);
-                    })
-                    .exceptionally(ex -> {
-                        responseHandler.onTicketError(ticketId);
-                        return null;
-                    });
-            log.info("BetPending thread finished: ticketId 1: {}", ticketId);
-
-        } catch (ExecutionException | InterruptedException e) {
-            responseHandler.onTicketError(ticketId);
-            log.error("Error while sending ticket request: {}", e.getMessage());
-        }
-
+        ticketProtocol
+                .sendTicketAsync(ticketRequest)  // returns CompletableFuture<TicketResponse>
+                .thenAccept(resp -> {
+                    responseHandler.onTicketResponse(ticketId, resp);
+                })
+                .exceptionally(ex -> {
+                    log.error("BetPending thread finished: sending ticket exception", ex);
+                    responseHandler.onTicketError(ticketId);
+                    return null;
+                });
     }
     private Channel getChannel(long source, String ipAddress){
         Channel channel = Channel.newInternetChannelBuilder()

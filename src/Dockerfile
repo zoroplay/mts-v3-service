@@ -36,9 +36,9 @@ ENV MBS_WS_SERVER="wss://wss.dataplane-nonprod.sportradar.dev" \
     MBS_OPERATOR_ID="37228" \
     mts_bookmaker_id="37228" \
     mts_currency="USD" \
-    mts_limit_id="37228" \
+    mts_limit_id="4793" \
     GRPC_PORT="9010"\
-    BETTING_SERVICE_HOST="127.0.0.1" \
+    BETTING_SERVICE_HOST="host.docker.internal" \
     BETTING_SERVICE_GRPC_PORT="3001"
 
 ENTRYPOINT ["java","-jar","/app/app.jar"]
