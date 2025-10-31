@@ -1,10 +1,7 @@
 package com.sbe.gateway.workers;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.SerializationFeature;
 import com.sbe.gateway.BettingClient;
-import com.sbe.gateway.handlers.ResponseHandler;
+import com.sbe.gateway.handlers.BetPendingResponseHandler;
 import com.sportradar.mbs.sdk.MbsSdk;
 import com.sportradar.mbs.sdk.entities.channel.Channel;
 import com.sportradar.mbs.sdk.entities.common.*;
@@ -42,7 +39,7 @@ public class BetPending implements Runnable {
     public void run() {
         // 1. Get the TicketProtocol
         TicketProtocol ticketProtocol = mbsSdk.getTicketProtocol();
-        ResponseHandler responseHandler = new ResponseHandler(bettingClient);
+        BetPendingResponseHandler responseHandler = new BetPendingResponseHandler(bettingClient);
 
         // 2. Build the TicketRequest
         MTSBet object = message;

@@ -23,8 +23,6 @@ option java_multiple_files = true;
 service Mts {
   rpc SubmitBet(MTSBet) returns (MtsGeneralAck) {}
   rpc SubmitBetCancel(BetCancelRequest) returns (MtsGeneralAck) {}
-  rpc SubmitCashoutRequest(MTSBet) returns (MtsGeneralAck) {}
-
 }
 
 message MTSBetSlip {
@@ -55,4 +53,5 @@ message MtsGeneralAck {
 message BetCancelRequest {
   string betID = 1;
   int64 code = 2;
+  string signature = 3;
 }

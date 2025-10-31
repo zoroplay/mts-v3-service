@@ -1,5 +1,6 @@
 package com.sbe.gateway;
 
+import com.sbe.gateway.workers.BetCancel;
 import com.sbe.gateway.workers.BetPending;
 import com.sportradar.mbs.sdk.MbsSdk;
 import com.sportradar.mbs.sdk.protocol.TicketProtocol;
@@ -41,22 +42,10 @@ public class MtsServiceImpl extends MtsGrpc.MtsImplBase {
 
     @Override
     public void submitBetCancel(BetCancelRequest req, StreamObserver<MtsGeneralAck> out) {
+        log.info("Cancelling Bet");
         try {
-            TicketProtocol tp = sdk.getTicketProtocol();
-
-            // ===== MAP YOUR gRPC REQUEST -> SDK REQUEST =====
-            // The exact types depend on your SDK’s published model classes.
-            // Typical pattern (adjust package/class names based on your SDK):
-            //
-            // CancelTicketRequest cancelReq = new CancelTicketRequest(
-            //     req.getBetID(),  // or build with a builder/DTO your SDK provides
-            //     ...reason...     // map cancellation reason if present
-            // );
-            //
-            // CancelTicketResponse resp = tp.sendCancelTicket(cancelReq); // or sendCancelTicketAsync(...).get()
-
-            // For now, just ACK so the wiring is proven:
-            out.onNext(MtsGeneralAck.newBuilder().setDescription("cancel request submitted").build());
+            executor.submit(new BetCancel(sdk,bettingClient, req));
+            out.onNext(MtsGeneralAck.newBuilder().setDescription("ticket submitted for cancellation").build());
             out.onCompleted();
         } catch (Exception e) {
             out.onNext(MtsGeneralAck.newBuilder().setDescription("ERR: " + e.getMessage()).build());

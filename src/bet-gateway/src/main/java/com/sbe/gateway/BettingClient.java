@@ -14,7 +14,7 @@ public class BettingClient implements AutoCloseable {
     private static final Logger log = LoggerFactory.getLogger(BettingClient.class);
 
     private final ManagedChannel channel;
-    private final BettingServiceGrpc.BettingServiceBlockingStub blocking;
+private final BettingServiceGrpc.BettingServiceBlockingStub blocking;
 
     public BettingClient() {
         String host = System.getenv("BETTING_SERVICE_HOST");
@@ -33,10 +33,11 @@ public class BettingClient implements AutoCloseable {
         this.blocking = BettingServiceGrpc.newBlockingStub(intercepted);
     }
 
-    public void betAcceptedResponse(Integer code, String description, String betId) {
+    public void betAcceptedResponse(Integer code, String description, String betId, String signature) {
         MTSResponse req = MTSResponse.newBuilder()
                 .setBetID(betId)
                 .setCode(code)
+                .setSignature(signature)
                 .setDescription(description)
                 .build();
         GeneralAck ack = blocking.betAcceptedResponse(req);
@@ -52,13 +53,13 @@ public class BettingClient implements AutoCloseable {
         GeneralAck ack = blocking.betCancelledResponse(req);
     }
 
-    public GeneralAck cancelBetAcceptedResponse(Integer code, String description,String betId) {
+    public void cancelBetAcceptedResponse(Integer code, String description,String betId) {
         MTSResponse req = MTSResponse.newBuilder()
                 .setBetID(betId)
                 .setCode(code)
                 .setDescription(description)
                 .build();
-        return blocking.cancelBetAcceptedResponse(req);
+        GeneralAck ack =  blocking.cancelBetAcceptedResponse(req);
     }
 
     public void cancelBetRejectedResponse(Integer code, String description,String betId) {

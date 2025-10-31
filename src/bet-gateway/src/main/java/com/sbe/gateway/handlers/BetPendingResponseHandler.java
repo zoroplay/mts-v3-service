@@ -6,8 +6,8 @@ import com.sportradar.mbs.sdk.entities.response.TicketResponse;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-public record ResponseHandler(BettingClient bettingClient) {
-    private static final Logger log = LoggerFactory.getLogger(ResponseHandler.class);
+public record BetPendingResponseHandler(BettingClient bettingClient) {
+    private static final Logger log = LoggerFactory.getLogger(BetPendingResponseHandler.class);
 
     /**
      * Called when MTS replies to a ticket submission.
@@ -21,7 +21,7 @@ public record ResponseHandler(BettingClient bettingClient) {
         ticketId = split[split.length - 1];
 
         if (resp.getStatus() == AcceptanceStatus.ACCEPTED) {
-            bettingClient.betAcceptedResponse(code, "Ok", ticketId);
+            bettingClient.betAcceptedResponse(code, "Ok", ticketId,resp.getSignature());
         } else {
             bettingClient.betCancelledResponse(code, resp.getMessage(), ticketId);
         }

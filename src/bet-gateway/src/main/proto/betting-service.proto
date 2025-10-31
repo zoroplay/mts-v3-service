@@ -130,6 +130,7 @@ message MTSResponse {
   int64 code = 1;
   string description = 2;
   string betID = 3;
+  string signature = 4;
 }
 
 message GeneralAck {
