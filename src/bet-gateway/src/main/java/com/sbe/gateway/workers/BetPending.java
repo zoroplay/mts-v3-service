@@ -8,6 +8,7 @@ import com.sportradar.mbs.sdk.entities.common.*;
 import com.sportradar.mbs.sdk.entities.odds.Odds;
 import com.sportradar.mbs.sdk.entities.request.TicketRequest;
 import com.sportradar.mbs.sdk.entities.selection.Selection;
+import com.sportradar.mbs.sdk.entities.selection.SystemSelection;
 import com.sportradar.mbs.sdk.entities.selection.UfSelection;
 import com.sportradar.mbs.sdk.entities.stake.Stake;
 import com.sportradar.mbs.sdk.protocol.TicketProtocol;
@@ -68,7 +69,7 @@ public class BetPending implements Runnable {
                 .setCurrency(mts_currency)
                 .build();
         // Create a bet builder and loop through selections
-        List<Selection> selections = new ArrayList<>();
+        List<Selection> ufSelections = new ArrayList<>();
         for (int i = 0; i < object.getBetsCount(); i++) {
             MTSBetSlip slip = object.getBets(i);
 
@@ -92,21 +93,51 @@ public class BetPending implements Runnable {
                 sb.setSpecifiers(specifier);
             }
 
-            selections.add(sb.build());
+            ufSelections.add(sb.build());
         }
 
         List<Bet> bets = new ArrayList<>();
+        if ("system".equalsIgnoreCase(object.getBetType())) {
 
-        Bet bet = Bet.newBuilder()
-                .setStake(stake)
-                .setSelections(selections)
-                .setContext(
-                        BetContext.newBuilder()
-                                .setOddsChange(OddsChange.ANY)
-                                .build()
-                ).build();
+            // systemSizes => the "size" array in JSON, e.g. [3] for 3/4
+            List<Integer> sizes = new ArrayList<>();
+            for (int i = 0; i < object.getSystemSizesCount(); i++) {
+                sizes.add((int) object.getSystemSizes(i));
+            }
 
-        bets.add(bet);
+            SystemSelection systemSelection = SystemSelection.newBuilder()
+                    .setSelections(ufSelections)
+                    .setSize(sizes)
+                    .build();
+
+            List<Selection> selections = new ArrayList<>();
+            selections.add(systemSelection);
+
+            Bet bet = Bet.newBuilder()
+                    .setStake(stake)
+                    .setSelections(selections)
+                    .setContext(
+                            BetContext.newBuilder()
+                                    .setOddsChange(OddsChange.ANY)
+                                    .build()
+                    )
+                    .build();
+
+            bets.add(bet);
+
+        } else {
+
+            Bet bet = Bet.newBuilder()
+                    .setStake(stake)
+                    .setSelections(ufSelections)
+                    .setContext(
+                            BetContext.newBuilder()
+                                    .setOddsChange(OddsChange.ANY)
+                                    .build()
+                    ).build();
+
+            bets.add(bet);
+        }
 
         TicketRequest ticketRequest = TicketRequest.newBuilder()
                 .setTicketId(ticketId)

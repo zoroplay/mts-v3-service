@@ -1,0 +1,5 @@
+docker build -t sbe/bet-gateway:1.0.0 .
+docker run -p 9010:9010 sbe/bet-gateway:1.0.0
+
+mvn -q -pl bet-gateway -am clean compile
+mvn -q -pl bet-gateway -am clean package

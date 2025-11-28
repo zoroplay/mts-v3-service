@@ -44,6 +44,8 @@ message MTSBet {
   string betID = 5;
   string returnChannel = 6;
   repeated MTSBetSlip bets = 7;
+  string betType = 8;
+  repeated int64 systemSizes = 9;
 }
 
 message MtsGeneralAck {
