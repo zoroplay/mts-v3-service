@@ -2,15 +2,12 @@ package com.sbe.gateway;
 
 import com.sbe.gateway.workers.BetCancel;
 import com.sbe.gateway.workers.BetPending;
+import com.sbe.gateway.workers.CashoutPending;
 import com.sportradar.mbs.sdk.MbsSdk;
-import com.sportradar.mbs.sdk.protocol.TicketProtocol;
 import io.grpc.stub.StreamObserver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import protobuf.BetCancelRequest;
-import protobuf.MtsGrpc;
-import protobuf.MTSBet;
-import protobuf.MtsGeneralAck;
+import protobuf.*;
 
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadPoolExecutor;
@@ -49,6 +46,27 @@ public class MtsServiceImpl extends MtsGrpc.MtsImplBase {
             out.onCompleted();
         } catch (Exception e) {
             out.onNext(MtsGeneralAck.newBuilder().setDescription("ERR: " + e.getMessage()).build());
+            out.onCompleted();
+        }
+    }
+
+    @Override
+    public void submitCashout(MTSCashoutRequest req, StreamObserver<MTSCashoutResponse> out) {
+        log.info("Submitting Cashout (isBuild = {})", req.getIsBuild());
+        try {
+            // For cashout we want to respond *on this RPC*,
+            // so we pass the StreamObserver down to the worker
+            executor.submit(new CashoutPending(sdk, req, out));
+            // Do NOT call out.onCompleted() here – the worker will
+        } catch (Exception e) {
+            MTSCashoutResponse err = MTSCashoutResponse.newBuilder()
+                    .setBetID(req.getBetID())
+                    .setIsBuild(req.getIsBuild())
+                    .setSuccess(false)
+                    .setStatus("ERROR")
+                    .setReason("ERR: " + e.getMessage())
+                    .build();
+            out.onNext(err);
             out.onCompleted();
         }
     }

@@ -23,6 +23,7 @@ option java_multiple_files = true;
 service Mts {
   rpc SubmitBet(MTSBet) returns (MtsGeneralAck) {}
   rpc SubmitBetCancel(BetCancelRequest) returns (MtsGeneralAck) {}
+  rpc SubmitCashout(MTSCashoutRequest) returns (MTSCashoutResponse) {}
 }
 
 message MTSBetSlip {
@@ -56,4 +57,45 @@ message BetCancelRequest {
   string betID = 1;
   int64 code = 2;
   string signature = 3;
+}
+
+// Cashout request
+message MTSCashoutRequest {
+  string betID = 1;
+  int64  profileID = 2;
+  int64  betSource = 3;
+  string ipAddress = 4;
+
+  // Flow control
+  bool   is_build       = 5;   // true = cashout-build, false = cashout-placement
+
+  // Optional: how much to cash out
+  // For build, these can be 0 and ignored (MTS will propose).
+  double requested_payout   = 6;
+  double requested_percent  = 7; // 1.0 = full stake, 0.5 = half stake, etc. for partial
+}
+
+// Cashout response
+message MTSCashoutResponse {
+  string betID = 1;
+
+  // build vs placement so Go knows what this response refers to
+  bool   is_build   = 2;
+
+  // Overall result
+  bool   success    = 3;
+  string status     = 4;
+  string reason     = 5;
+
+  // Suggested cashout (main quote MTS gives)
+  double payout      = 6;
+
+  // "Fair" payout suggestion
+  double fair_payout = 7;
+
+  // Max cashout allowed
+  double max_payout  = 8;
+
+  string cashout_type = 10;
+  string cashout_id   = 11;
 }
