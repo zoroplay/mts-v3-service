@@ -164,7 +164,6 @@ public class BetPending implements Runnable {
                 .setIp(ipAddress)
                 .setLang("EN")
                 .build();
-
         if (source == 2 || source == 3) {
             channel = Channel.newMobileChannelBuilder()
                     .setIp(ipAddress)
