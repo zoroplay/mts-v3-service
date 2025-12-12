@@ -78,6 +78,7 @@ public class CashoutPending implements Runnable {
                 TicketCashoutDetails details = TicketCashoutDetails.newBuilder()
                         .setTicketId(ticketId)
                         .setCode(100) // end customer initiated; adjust if needed
+                        .setTicketSignature(req.getSignature())
                         .build();
 
                 cashoutBuilder.setDetails(details);
@@ -89,6 +90,7 @@ public class CashoutPending implements Runnable {
                             .setTicketId(ticketId)
                             .setCode(100)
                             .setPercentage(BigDecimal.valueOf(requestedPercent))
+                            .setTicketSignature(req.getSignature())
                             .build();
                     cashoutBuilder.setDetails(details);
 

@@ -73,6 +73,7 @@ message MTSCashoutRequest {
   // For build, these can be 0 and ignored (MTS will propose).
   double requested_payout   = 6;
   double requested_percent  = 7; // 1.0 = full stake, 0.5 = half stake, etc. for partial
+  string signature = 8;
 }
 
 // Cashout response
@@ -95,7 +96,7 @@ message MTSCashoutResponse {
 
   // Max cashout allowed
   double max_payout  = 8;
-
+  string signature = 9;
   string cashout_type = 10;
   string cashout_id   = 11;
 }
