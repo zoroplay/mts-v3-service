@@ -5,8 +5,7 @@
 #
 FROM maven:3.8.6-openjdk-8 AS build
 RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
-COPY src /home/app/src
-COPY src/pom.xml /home/app
+COPY src /home/app
 RUN mvn -f /home/app/pom.xml clean package
 
 #
