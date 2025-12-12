@@ -3,16 +3,16 @@ FROM maven:3.9.8-eclipse-temurin-17 AS builder
 WORKDIR /app
 
 # 1) Copy only POMs first for better cache on deps
-COPY pom.xml /app/pom.xml
-COPY sdk/pom.xml /app/sdk/pom.xml
-COPY bet-gateway/pom.xml /app/bet-gateway/pom.xml
+COPY src/pom.xml /app/pom.xml
+COPY src/sdk/pom.xml /app/sdk/pom.xml
+COPY src/bet-gateway/pom.xml /app/bet-gateway/pom.xml
 
 # 2) Pre-fetch dependencies for the reactor (esp. protobuf/grpc/tooling)
 RUN mvn -q -f /app/pom.xml -pl bet-gateway -am -DskipTests dependency:go-offline
 
 # 3) Now copy sources
-COPY sdk/src /app/sdk/src
-COPY bet-gateway/src /app/bet-gateway/src
+COPY src/sdk/src /app/sdk/src
+COPY src/bet-gateway/src /app/bet-gateway/src
 
 # 4) Build SDK + Gateway and produce shaded jar for gateway
 RUN mvn -q -f /app/pom.xml -pl bet-gateway -am -DskipTests package
