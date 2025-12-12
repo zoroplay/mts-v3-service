@@ -12,7 +12,7 @@ RUN mvn -f /home/app/pom.xml clean package
 #
 # Package stage
 #
-FROM openjdk:17-jdk-alpine
+FROM eclipse-temurin:17-jdk-alpine
 COPY --from=build /home/app/target/mts-service-*.jar /usr/local/lib/mts-service.jar
 COPY .env /usr/local/lib/
 RUN mkdir -p /gaming/logs/mts/sdk/traffic
