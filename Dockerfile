@@ -12,7 +12,7 @@ RUN mvn -f /home/app/pom.xml clean package
 # Package stage
 #
 FROM eclipse-temurin:17-jdk-alpine
-COPY --from=build /home/app/bet-gateway/target/*.jar /usr/local/lib/mts-service.jar
+COPY --from=build /home/app/bet-gateway/target/bet-gateway-1.0.0-all.jar /usr/local/lib/mts-service.jar
 COPY .env* /usr/local/lib/
 RUN mkdir -p /gaming/logs/mts/sdk/traffic
 
