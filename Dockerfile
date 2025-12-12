@@ -6,7 +6,7 @@
 FROM maven:3.8.6-openjdk-8 AS build
 RUN apt-get update && apt-get install -y protobuf-compiler && rm -rf /var/lib/apt/lists/*
 COPY src /home/app/src
-COPY pom.xml /home/app
+COPY src/pom.xml /home/app
 RUN mvn -f /home/app/pom.xml clean package
 
 #
@@ -14,7 +14,7 @@ RUN mvn -f /home/app/pom.xml clean package
 #
 FROM eclipse-temurin:17-jdk-alpine
 COPY --from=build /home/app/target/mts-service-*.jar /usr/local/lib/mts-service.jar
-COPY .env /usr/local/lib/
+COPY .env* /usr/local/lib/
 RUN mkdir -p /gaming/logs/mts/sdk/traffic
 
 WORKDIR /usr/local/lib
