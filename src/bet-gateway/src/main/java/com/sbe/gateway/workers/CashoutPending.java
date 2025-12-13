@@ -46,6 +46,7 @@ public class CashoutPending implements Runnable {
         TicketProtocol cashoutProtocol = mbsSdk.getTicketProtocol();
 
         String ticketId = System.getenv("mts_bookmaker_id") + "_" + req.getBetID();
+        String mtsCurrency = System.getenv("mts_currency");
         long profileId = req.getProfileID();
         long source = req.getBetSource();
         String ipAddress = req.getIpAddress();
@@ -75,10 +76,18 @@ public class CashoutPending implements Runnable {
 
             if (isBuild) {
                 // CASHOUT-BUILD (quote only)
+                // for build, either use requestedPayout if >0, or at least 0
+                double buildAmount = requestedPayout > 0 ? requestedPayout : 0.0;
+
+                CashPayout buildPayout = CashPayout.newBuilder()
+                        .setAmount(BigDecimal.valueOf(buildAmount))
+                        .setCurrency(mtsCurrency)
+                        .build();
                 TicketCashoutDetails details = TicketCashoutDetails.newBuilder()
                         .setTicketId(ticketId)
                         .setCode(100) // end customer initiated; adjust if needed
                         .setTicketSignature(req.getSignature())
+                        .setPayout(buildPayout)
                         .build();
 
                 cashoutBuilder.setDetails(details);
