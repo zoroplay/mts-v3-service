@@ -74,20 +74,17 @@ public class CashoutPending implements Runnable {
             CashoutRequest.Builder cashoutBuilder = CashoutRequest.newBuilder()
                     .setCashoutId(ticketId);
 
+            CashPayout payout = CashPayout.newBuilder()
+                    .setAmount(BigDecimal.valueOf(requestedPayout)) // MUST be set by Go
+                    .setCurrency(mtsCurrency)
+                    .build();
             if (isBuild) {
                 // CASHOUT-BUILD (quote only)
-                // for build, either use requestedPayout if >0, or at least 0
-                double buildAmount = requestedPayout > 0 ? requestedPayout : 0.0;
-
-                CashPayout buildPayout = CashPayout.newBuilder()
-                        .setAmount(BigDecimal.valueOf(buildAmount))
-                        .setCurrency(mtsCurrency)
-                        .build();
                 TicketCashoutDetails details = TicketCashoutDetails.newBuilder()
                         .setTicketId(ticketId)
                         .setCode(100) // end customer initiated; adjust if needed
                         .setTicketSignature(req.getSignature())
-                        .setPayout(buildPayout)
+                        .setPayout(payout)
                         .build();
 
                 cashoutBuilder.setDetails(details);
@@ -100,18 +97,15 @@ public class CashoutPending implements Runnable {
                             .setCode(100)
                             .setPercentage(BigDecimal.valueOf(requestedPercent))
                             .setTicketSignature(req.getSignature())
+                            .setPayout(payout)
                             .build();
                     cashoutBuilder.setDetails(details);
 
                 } else if (requestedPayout > 0) {
-                    // Partial/Full cashout by payout amount
-                    CashPayout payout = CashPayout.newBuilder()
-                            .setAmount(BigDecimal.valueOf(requestedPayout))
-                            .build();
-
                     TicketPartialCashoutDetails details = TicketPartialCashoutDetails.newBuilder()
                             .setTicketId(ticketId)
                             .setCode(100)
+                            .setTicketSignature(req.getSignature())
                             .setPayout(payout)
                             .build();
                     cashoutBuilder.setDetails(details);
@@ -121,6 +115,8 @@ public class CashoutPending implements Runnable {
                     TicketCashoutDetails details = TicketCashoutDetails.newBuilder()
                             .setTicketId(ticketId)
                             .setCode(100)
+                            .setTicketSignature(req.getSignature())
+                            .setPayout(payout)
                             .build();
                     cashoutBuilder.setDetails(details);
                 }
