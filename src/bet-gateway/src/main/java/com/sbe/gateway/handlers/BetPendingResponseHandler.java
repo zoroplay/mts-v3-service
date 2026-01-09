@@ -15,7 +15,6 @@ public record BetPendingResponseHandler(BettingClient bettingClient) {
     public void onTicketResponse(String ticketId, TicketResponse resp) {
         log.debug("Received ticket response for ticketId={}", resp);
         int code = resp.getCode();
-
         // get back real ticket id
         String[] split = ticketId.split("_");
         ticketId = split[split.length - 1];
