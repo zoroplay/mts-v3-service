@@ -1,5 +1,8 @@
 package com.sbe.gateway.workers;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.sbe.gateway.BettingClient;
 import com.sbe.gateway.handlers.BetPendingResponseHandler;
 import com.sportradar.mbs.sdk.MbsSdk;
@@ -27,9 +30,9 @@ public class BetPending implements Runnable {
     MbsSdk mbsSdk;
     BettingClient bettingClient;
     public MTSBet message;
-//    private static final ObjectMapper MAPPER = new ObjectMapper()
-//            .enable(SerializationFeature.INDENT_OUTPUT)        // pretty-print
-//            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .enable(SerializationFeature.INDENT_OUTPUT)        // pretty-print
+            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
     public BetPending(MbsSdk mbsSdk,BettingClient bettingClient, MTSBet message){
         this.mbsSdk = mbsSdk;
         this.message = message;
