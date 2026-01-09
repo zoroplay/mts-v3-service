@@ -2,9 +2,9 @@ name: Build and Deploy
 
 on:
   push:
-    branches: [ main , staging ]
+    branches: [ main, master, staging ]
   pull_request:
-    branches: [ main, staging ]
+    branches: [ main, master, staging ]
 
 permissions:
   contents: write
@@ -18,7 +18,7 @@ env:
 
 jobs:
   version:
-    runs-on: [self-hosted, linux, x64]
+    runs-on: self-hosted
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -59,7 +59,7 @@ jobs:
 
   build:
     needs: version
-    runs-on: [self-hosted, linux, x64]
+    runs-on: self-hosted
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -86,13 +86,13 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=raw,value=${{ needs.version.outputs.version }}
-            type=raw,value=latest
+            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=staging,enable=${{ github.ref == 'refs/heads/staging' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
         with:
           context: .
-          file: src/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
@@ -101,8 +101,8 @@ jobs:
 
   release:
     needs: [version, build]
-    runs-on: [self-hosted, linux, x64]
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/staging'
+    runs-on: self-hosted
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/staging'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -115,39 +115,120 @@ jobs:
         with:
           node-version: '20'
 
-      - name: Install dependencies
+      - name: Run semantic-release in Docker
         run: |
-          npm install
-          npm install --save-dev semantic-release @semantic-release/changelog @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/github @semantic-release/exec @semantic-release/git
+          docker run --rm \
+            -v "$PWD:/workspace" \
+            -w /workspace \
+            -e GITHUB_TOKEN="${{ secrets.GITHUB_TOKEN }}" \
+            -e CI=true \
+            node:20-alpine sh -c '
+              apk add --no-cache git openssh-client && \
+              git config --global --add safe.directory /workspace && \
+              git config --global user.email "action@github.com" && \
+              git config --global user.name "GitHub Action" && \
+              npm install -g semantic-release @semantic-release/changelog @semantic-release/commit-analyzer @semantic-release/release-notes-generator @semantic-release/github @semantic-release/git && \
+              npx semantic-release
+            '
 
-      - name: Create release config
+  deploy:
+    needs: [version, build, release]
+    runs-on: self-hosted
+    if: github.ref == 'refs/heads/staging'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create version file from output
         run: |
-          cat > release.config.js << 'EOF'
-          module.exports = {
-            branches: [
-              { name: 'main' },
-              { name: 'staging', prerelease: 'staging' },
-            ],
-            repositoryUrl: 'https://github.com/${{ github.repository }}.git',
-            tagFormat: 'v${version}',
-            plugins: [
-              '@semantic-release/commit-analyzer',
-              '@semantic-release/release-notes-generator',
-              '@semantic-release/changelog',
-              ['@semantic-release/github', {
-                successComment: false,
-                failComment: false,
-                releasedLabels: false
-              }],
-              '@semantic-release/git',
-            ],
-            preset: 'angular',
-          };
-          EOF
+          echo "${{ needs.version.outputs.version }}" > .VERSION
+          echo "Version from previous job: ${{ needs.version.outputs.version }}"
 
-      - name: Run semantic-release
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: npx semantic-release
+      - name: Set up SSH
+        run: |
+          if [ -z "${{ secrets.STAGING_SERVER_IP }}" ]; then
+            echo "Error: STAGING_SERVER_IP secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "Error: SSH_PRIVATE_KEY secret is not set"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          echo "Testing SSH key format..."
+          ssh-keygen -l -f ~/.ssh/id_rsa || echo "SSH key format issue"
+          echo "Adding server to known hosts..."
+          ssh-keyscan -H ${{ secrets.STAGING_SERVER_IP }} >> ~/.ssh/known_hosts || echo "Failed to scan host"
+          echo "Testing SSH connection..."
+          ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_IP }} 'echo "SSH connection successful"' || echo "SSH connection failed"
 
-  
+      - name: Create .env file
+        run: |
+          # Determine which environment file to use based on branch
+          if [ "${{ github.ref }}" = "refs/heads/staging" ]; then
+            cp .env.staging .env
+          elif [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/master" ]; then
+            cp .env.production .env
+          else
+            echo "Unknown branch, using staging config"
+            cp .env.staging .env
+          fi
+
+      - name: Prepare deployment files
+        run: |
+          NEXT_VERSION=$(cat .VERSION | tr -d "[:space:]\"'" | xargs)
+          echo "Deploying version: $NEXT_VERSION"
+          
+          # Update docker-compose with new image version
+          sed -i "s|image: ghcr.io.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$NEXT_VERSION|g" docker-compose.yml
+
+      - name: Deploy to STAGING server
+        run: |
+          # Create directory on server
+          ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_IP }} 'mkdir -p ~/mts-v3-service/'
+          
+          # Copy files to server
+          scp -o StrictHostKeyChecking=no .env ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_IP }}:~/mts-v3-service/
+          scp -o StrictHostKeyChecking=no docker-compose.yml ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_IP }}:~/mts-v3-service/
+          scp -o StrictHostKeyChecking=no deploy.sh ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_IP }}:~/mts-v3-service/
+          
+          # Login to GitHub Container Registry on server and execute deployment
+          ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_IP }} '
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            chmod +x ~/mts-v3-service/deploy.sh
+            bash ~/mts-v3-service/deploy.sh
+          '
+
+  deploy-production:
+    needs: [version, build, release]
+    runs-on: self-hosted
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Create version file from output
+        run: |
+          echo "${{ needs.version.outputs.version }}" > .VERSION
+          echo "Version from previous job: ${{ needs.version.outputs.version }}"
+
+      - name: Create .env file
+        run: |
+          cp .env.production .env
+
+      - name: Prepare deployment files
+        run: |
+          NEXT_VERSION=$(cat .VERSION | tr -d "[:space:]\"'" | xargs)
+          echo "Deploying version: $NEXT_VERSION"
+          
+          # Update docker-compose with new image version
+          sed -i "s|image: ghcr.io.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$NEXT_VERSION|g" docker-compose.yml
+
+      - name: Deploy to PRODUCTION server
+        run: |
+          echo "Production deployment would go here"
+          echo "Configure PRODUCTION_SERVER_IP, PRODUCTION_SERVER_USER secrets for actual deployment"
+
+ # ci trigger....
