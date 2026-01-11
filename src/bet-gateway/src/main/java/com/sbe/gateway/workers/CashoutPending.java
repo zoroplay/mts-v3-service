@@ -74,8 +74,9 @@ public class CashoutPending implements Runnable {
             CashoutRequest.Builder cashoutBuilder = CashoutRequest.newBuilder()
                     .setCashoutId(ticketId);
 
+            log.info("requestedPayout: {}", requestedPayout);
             CashPayout payout = CashPayout.newBuilder()
-                    .setAmount(BigDecimal.valueOf(requestedPayout)) // MUST be set by Go
+                    .setAmount(BigDecimal.valueOf(requestedPayout))
                     .setCurrency(mtsCurrency)
                     .build();
             if (isBuild) {
