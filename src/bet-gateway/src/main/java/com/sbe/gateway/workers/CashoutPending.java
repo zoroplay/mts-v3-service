@@ -22,6 +22,7 @@ import protobuf.MTSCashoutRequest;
 import protobuf.MTSCashoutResponse;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.concurrent.CompletableFuture;
 
 public class CashoutPending implements Runnable {
@@ -75,8 +76,11 @@ public class CashoutPending implements Runnable {
                     .setCashoutId(ticketId);
 
             log.info("requestedPayout: {}", requestedPayout);
+            BigDecimal payoutAmount = BigDecimal
+                    .valueOf(requestedPayout)
+                    .setScale(8, RoundingMode.DOWN);
             CashPayout payout = CashPayout.newBuilder()
-                    .setAmount(BigDecimal.valueOf(requestedPayout))
+                    .setAmount(payoutAmount)
                     .setCurrency(mtsCurrency)
                     .build();
             if (isBuild) {
