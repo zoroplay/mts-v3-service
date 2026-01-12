@@ -54,6 +54,7 @@ public class CashoutPending implements Runnable {
         boolean isBuild = req.getIsBuild();
         double requestedPayout = req.getRequestedPayout();
         double requestedPercent = req.getRequestedPercent();
+        log.info("Cashout request for ticket {} (build={}): requestedPayout: {} requestedPercent: {}", ticketId, isBuild,requestedPayout,requestedPercent);
 
         int limitID = Integer.parseInt(System.getenv("mts_limit_id"));
 
