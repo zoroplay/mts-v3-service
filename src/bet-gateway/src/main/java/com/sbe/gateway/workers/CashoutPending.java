@@ -184,7 +184,7 @@ public class CashoutPending implements Runnable {
             }
 
         } catch (Exception e) {
-            log.error("Unexpected error building cashout request for ticket {}", ticketId, e);
+            log.error("Unexpected error building cashout request for ticket: {}", ticketId, e);
             MTSCashoutResponse out = MTSCashoutResponse.newBuilder()
                     .setBetID(ticketId)
                     .setIsBuild(isBuild)
