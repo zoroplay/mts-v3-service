@@ -75,7 +75,6 @@ public class CashoutPending implements Runnable {
             CashoutRequest.Builder cashoutBuilder = CashoutRequest.newBuilder()
                     .setCashoutId(ticketId);
 
-            log.info("requestedPayout: {}", requestedPayout);
             BigDecimal payoutAmount = BigDecimal
                     .valueOf(requestedPayout)
                     .setScale(8, RoundingMode.DOWN);
