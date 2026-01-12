@@ -198,9 +198,8 @@ public class CashoutPending implements Runnable {
     }
 
     /**
-     * Map a CashoutBuildResponse (cashout-build) to your gRPC MTSCashoutResponse.
+     * Maps a CashoutBuildResponse (cashout-build) to gRPC MTSCashoutResponse.
      * CashoutBuildResponse has status, message, ticketId, cashoutId, and a CashoutSuggestions object
-     * where you can later pull suggested payout values if you need them. :contentReference[oaicite:2]{index=2}
      */
     private MTSCashoutResponse mapBuildResponse(CashoutBuildResponse resp, String ticketId) {
         MTSCashoutResponse.Builder out = MTSCashoutResponse.newBuilder()
@@ -259,8 +258,8 @@ public class CashoutPending implements Runnable {
     }
 
     /**
-     * Map a CashoutResponse (cashout placement) to your gRPC MTSCashoutResponse.
-     * Note: CashoutResponse in this SDK does NOT carry a payout amount, only status/message/etc. :contentReference[oaicite:3]{index=3}
+     * Maps a CashoutResponse (cashout placement) to gRPC MTSCashoutResponse.
+     * Note: CashoutResponse in this SDK does NOT carry a payout amount, only status/message/etc
      */
     private MTSCashoutResponse mapPlacementResponse(CashoutPlacementResponse resp, String ticketId) {
         MTSCashoutResponse.Builder out = MTSCashoutResponse.newBuilder()
