@@ -96,7 +96,7 @@ public class CashoutPending implements Runnable {
             } else {
                 // CASHOUT-PLACEMENT
                 if (requestedPercent > 0 && requestedPercent < 1.0) {
-                    // Partial cashout by percent
+                    // Partial cashout
                     TicketPartialCashoutDetails details = TicketPartialCashoutDetails.newBuilder()
                             .setTicketId(ticketId)
                             .setCode(100)
@@ -105,18 +105,8 @@ public class CashoutPending implements Runnable {
                             .setPayout(payout)
                             .build();
                     cashoutBuilder.setDetails(details);
-
-                } else if (requestedPayout > 0) {
-                    TicketPartialCashoutDetails details = TicketPartialCashoutDetails.newBuilder()
-                            .setTicketId(ticketId)
-                            .setCode(100)
-                            .setTicketSignature(req.getSignature())
-                            .setPayout(payout)
-                            .build();
-                    cashoutBuilder.setDetails(details);
-
                 } else {
-                    // Full ticket cashout with default strategy
+                    // Full cashout
                     TicketCashoutDetails details = TicketCashoutDetails.newBuilder()
                             .setTicketId(ticketId)
                             .setCode(100)
@@ -125,6 +115,7 @@ public class CashoutPending implements Runnable {
                             .build();
                     cashoutBuilder.setDetails(details);
                 }
+
             }
 
             CashoutRequest cashoutRequest = cashoutBuilder.build();
