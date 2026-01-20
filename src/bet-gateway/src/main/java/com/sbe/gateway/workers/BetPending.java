@@ -13,12 +13,13 @@ import com.sportradar.mbs.sdk.entities.request.TicketRequest;
 import com.sportradar.mbs.sdk.entities.selection.Selection;
 import com.sportradar.mbs.sdk.entities.selection.SystemSelection;
 import com.sportradar.mbs.sdk.entities.selection.UfSelection;
+import com.sportradar.mbs.sdk.entities.selection.WaysSelection;
 import com.sportradar.mbs.sdk.entities.stake.Stake;
 import com.sportradar.mbs.sdk.protocol.TicketProtocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import protobuf.MTSBet;
-import protobuf.MTSBetSlip;
+import protobuf.MTSSelection;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -71,76 +72,29 @@ public class BetPending implements Runnable {
                 .setAmount(BigDecimal.valueOf(object.getStake()))
                 .setCurrency(mts_currency)
                 .build();
+
         // Create a bet builder and loop through selections
-        List<Selection> ufSelections = new ArrayList<>();
-        for (int i = 0; i < object.getBetsCount(); i++) {
-            MTSBetSlip slip = object.getBets(i);
+        List<Selection> rootSelections = new ArrayList<>();
 
-            String eventUrn = "sr:match:" + slip.getMatchID();
-
-            UfSelection.Builder sb = UfSelection.newBuilder()
-                    .setEventId(eventUrn)
-                    .setProductId(String.valueOf(slip.getProducerID()))
-                    .setMarketId(String.valueOf(slip.getMarketID()))
-                    .setOutcomeId(slip.getOutcomeID())
-                    .setOdds(
-                            Odds.newDecimalOddsBuilder()
-                                    .setValue(new BigDecimal(String.valueOf(slip.getOdds())))
-                                    .build()
-                    );
-
-            // only set specifiers if market requires it
-            String specifier = slip.getSpecifier();
-            specifier = specifier.replace("?", "&");
-            if (!specifier.isBlank()) {
-                sb.setSpecifiers(specifier);
+        if (object.getSelectionsCount() > 0) {
+            // structured mode (supports system/ways/bankers/multisystem)
+            for (MTSSelection s : object.getSelectionsList()) {
+                rootSelections.add(toSdkSelection(s));
             }
-
-            ufSelections.add(sb.build());
         }
 
         List<Bet> bets = new ArrayList<>();
-        if ("system".equalsIgnoreCase(object.getBetType())) {
+        Bet bet = Bet.newBuilder()
+                .setStake(stake)
+                .setSelections(rootSelections)
+                .setContext(
+                        BetContext.newBuilder()
+                                .setOddsChange(OddsChange.ANY)
+                                .build()
+                )
+                .build();
 
-            // systemSizes => the "size" array in JSON, e.g. [3] for 3/4
-            List<Integer> sizes = new ArrayList<>();
-            for (int i = 0; i < object.getSystemSizesCount(); i++) {
-                sizes.add((int) object.getSystemSizes(i));
-            }
-
-            SystemSelection systemSelection = SystemSelection.newBuilder()
-                    .setSelections(ufSelections)
-                    .setSize(sizes)
-                    .build();
-
-            List<Selection> selections = new ArrayList<>();
-            selections.add(systemSelection);
-
-            Bet bet = Bet.newBuilder()
-                    .setStake(stake)
-                    .setSelections(selections)
-                    .setContext(
-                            BetContext.newBuilder()
-                                    .setOddsChange(OddsChange.ANY)
-                                    .build()
-                    )
-                    .build();
-
-            bets.add(bet);
-
-        } else {
-
-            Bet bet = Bet.newBuilder()
-                    .setStake(stake)
-                    .setSelections(ufSelections)
-                    .setContext(
-                            BetContext.newBuilder()
-                                    .setOddsChange(OddsChange.ANY)
-                                    .build()
-                    ).build();
-
-            bets.add(bet);
-        }
+        bets.add(bet);
 
         TicketRequest ticketRequest = TicketRequest.newBuilder()
                 .setTicketId(ticketId)
@@ -205,5 +159,59 @@ public class BetPending implements Runnable {
                     .build();
         }
         return channel;
+    }
+
+    private Selection toSdkSelection(MTSSelection s) {
+        switch (s.getType()) {
+            case UF:
+                return toUf(s);
+
+            case WAYS:
+                List<Selection> wayChildren = new ArrayList<>();
+                for (protobuf.MTSSelection ch : s.getSelectionsList()) {
+                    wayChildren.add(toSdkSelection(ch)); // should end up UF
+                }
+                return WaysSelection.newBuilder()
+                        .setSelections(wayChildren)
+                        .build();
+
+            case SYSTEM:
+                List<Selection> sysChildren = new ArrayList<>();
+                for (protobuf.MTSSelection ch : s.getSelectionsList()) {
+                    sysChildren.add(toSdkSelection(ch)); // UF or WAYS
+                }
+                List<Integer> sizes = new ArrayList<>();
+                for (long sz : s.getSizeList()) sizes.add((int) sz);
+
+                return SystemSelection.newBuilder()
+                        .setSelections(sysChildren)
+                        .setSize(sizes)
+                        .build();
+
+            default:
+                throw new IllegalArgumentException("Unknown selection type: " + s.getType());
+        }
+    }
+
+    private UfSelection toUf(protobuf.MTSSelection s) {
+        String eventUrn = "sr:match:" + s.getMatchID();
+
+        UfSelection.Builder sb = UfSelection.newBuilder()
+                .setEventId(eventUrn)
+                .setProductId(String.valueOf(s.getProducerID()))
+                .setMarketId(String.valueOf(s.getMarketID()))
+                .setOutcomeId(s.getOutcomeID())
+                .setOdds(
+                        Odds.newDecimalOddsBuilder()
+                                .setValue(new BigDecimal(String.valueOf(s.getOdds())))
+                                .build()
+                );
+
+        String specifier = s.getSpecifier();
+        if (specifier != null) {
+            specifier = specifier.replace("?", "&");
+            if (!specifier.isBlank()) sb.setSpecifiers(specifier);
+        }
+        return sb.build();
     }
 }
