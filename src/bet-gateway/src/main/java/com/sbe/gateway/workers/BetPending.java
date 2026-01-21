@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import protobuf.MTSBet;
 import protobuf.MTSSelection;
+import protobuf.MTSTicket;
 
 import java.math.BigDecimal;
 import java.util.ArrayList;
@@ -30,11 +31,11 @@ public class BetPending implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(BetPending.class);
     MbsSdk mbsSdk;
     BettingClient bettingClient;
-    public MTSBet message;
+    public MTSTicket message;
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .enable(SerializationFeature.INDENT_OUTPUT)        // pretty-print
             .setSerializationInclusion(JsonInclude.Include.NON_NULL);
-    public BetPending(MbsSdk mbsSdk,BettingClient bettingClient, MTSBet message){
+    public BetPending(MbsSdk mbsSdk,BettingClient bettingClient, MTSTicket message){
         this.mbsSdk = mbsSdk;
         this.message = message;
         this.bettingClient = bettingClient;
@@ -47,7 +48,7 @@ public class BetPending implements Runnable {
         BetPendingResponseHandler responseHandler = new BetPendingResponseHandler(bettingClient);
 
         // 2. Build the TicketRequest
-        MTSBet object = message;
+        MTSTicket object = message;
         String ticketId = System.getenv("mts_bookmaker_id") + "_" + object.getBetID();
         String mts_currency = System.getenv("mts_currency");
         int limitID = Integer.parseInt(System.getenv("mts_limit_id"));
@@ -67,34 +68,36 @@ public class BetPending implements Runnable {
                 .setLimitId(limitID)
                 .build();
 
-        // build bets array
-        Stake stake = Stake.newCashStakeBuilder()
-                .setAmount(BigDecimal.valueOf(object.getStake()))
-                .setCurrency(mts_currency)
-                .build();
-
-        // Create a bet builder and loop through selections
-        List<Selection> betSelections = new ArrayList<>();
-
-        if (object.getSelectionsCount() > 0) {
-            // structured mode (supports system/ways/bankers/multisystem)
-            for (int i = 0; i < object.getSelectionsCount(); i++) {
-                betSelections.add(buildSelectionTree(object.getSelections(i)));
-            }
-        }
-
         List<Bet> bets = new ArrayList<>();
-        Bet bet = Bet.newBuilder()
-                .setStake(stake)
-                .setSelections(betSelections)
-                .setContext(
-                        BetContext.newBuilder()
-                                .setOddsChange(OddsChange.ANY)
-                                .build()
-                )
-                .build();
+        for (MTSBet obj : object.getBetsList()) {
+            // build bets array
+            Stake stake = Stake.newCashStakeBuilder()
+                    .setAmount(BigDecimal.valueOf(obj.getStake()))
+                    .setCurrency(mts_currency)
+                    .build();
 
-        bets.add(bet);
+            // Create a bet builder and loop through selections
+            List<Selection> betSelections = new ArrayList<>();
+
+            if (obj.getSelectionsCount() > 0) {
+                // structured mode (supports system/ways/bankers/multisystem)
+                for (int i = 0; i < obj.getSelectionsCount(); i++) {
+                    betSelections.add(buildSelectionTree(obj.getSelections(i)));
+                }
+            }
+
+            Bet bet = Bet.newBuilder()
+                    .setStake(stake)
+                    .setSelections(betSelections)
+                    .setContext(
+                            BetContext.newBuilder()
+                                    .setOddsChange(OddsChange.ANY)
+                                    .build()
+                    )
+                    .build();
+
+            bets.add(bet);
+        }
 
         TicketRequest ticketRequest = TicketRequest.newBuilder()
                 .setTicketId(ticketId)

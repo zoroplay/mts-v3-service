@@ -21,20 +21,24 @@ option java_multiple_files = true;
 
 // The Betting service definition.
 service Mts {
-  rpc SubmitBet(MTSBet) returns (MtsGeneralAck) {}
+  rpc SubmitBet(MTSTicket) returns (MtsGeneralAck) {}
   rpc SubmitBetCancel(BetCancelRequest) returns (MtsGeneralAck) {}
   rpc SubmitCashout(MTSCashoutRequest) returns (MTSCashoutResponse) {}
 }
 
 message MTSBet {
   float stake = 1;
-  int64 profileID = 2;
-  int64 betSource = 3;
-  string ipAddress = 4;
-  string betID = 5;
-  string returnChannel = 6;
   string betType = 7;
   repeated MTSSelection selections = 8;
+}
+
+message MTSTicket {
+  int64 profileID = 1;
+  int64 betSource = 2;
+  string ipAddress = 3;
+  string betID = 4;
+  string returnChannel = 5;
+  repeated MTSBet bets = 6;
 }
 
 message MTSSelection {
