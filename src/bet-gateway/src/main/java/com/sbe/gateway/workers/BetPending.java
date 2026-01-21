@@ -1,6 +1,7 @@
 package com.sbe.gateway.workers;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.sbe.gateway.BettingClient;
@@ -105,8 +106,12 @@ public class BetPending implements Runnable {
                 .setBets(bets)
                 .build();
 
-//        String json = MAPPER.writeValueAsString(ticketRequest);
-//        log.info("BetPending thread started: sending ticket request for ticketId {}:\n{}", ticketId, json);
+        try {
+            String json = MAPPER.writeValueAsString(ticketRequest);
+            log.info("BetPending thread started: sending ticket request for ticketId {}:\n{} message:\n{}", ticketId, json,message);
+        } catch (JsonProcessingException e) {
+//            throw new RuntimeException(e);
+        }
 
         ticketProtocol
                 .sendTicketAsync(ticketRequest)  // returns CompletableFuture<TicketResponse>
