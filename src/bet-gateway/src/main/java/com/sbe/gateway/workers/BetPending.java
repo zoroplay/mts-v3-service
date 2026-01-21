@@ -74,19 +74,19 @@ public class BetPending implements Runnable {
                 .build();
 
         // Create a bet builder and loop through selections
-        List<Selection> rootSelections = new ArrayList<>();
+        List<Selection> betSelections = new ArrayList<>();
 
         if (object.getSelectionsCount() > 0) {
             // structured mode (supports system/ways/bankers/multisystem)
-            for (MTSSelection s : object.getSelectionsList()) {
-                rootSelections.add(toSdkSelection(s));
+            for (int i = 0; i < object.getSelectionsCount(); i++) {
+                betSelections.add(buildSelectionTree(object.getSelections(i)));
             }
         }
 
         List<Bet> bets = new ArrayList<>();
         Bet bet = Bet.newBuilder()
                 .setStake(stake)
-                .setSelections(rootSelections)
+                .setSelections(betSelections)
                 .setContext(
                         BetContext.newBuilder()
                                 .setOddsChange(OddsChange.ANY)
@@ -116,6 +116,7 @@ public class BetPending implements Runnable {
                     return null;
                 });
     }
+
     private Channel getChannel(long source, String ipAddress){
         Channel channel = Channel.newInternetChannelBuilder()
                 .setIp(ipAddress)
@@ -161,39 +162,7 @@ public class BetPending implements Runnable {
         return channel;
     }
 
-    private Selection toSdkSelection(MTSSelection s) {
-        switch (s.getType()) {
-            case UF:
-                return toUf(s);
-
-            case WAYS:
-                List<Selection> wayChildren = new ArrayList<>();
-                for (protobuf.MTSSelection ch : s.getSelectionsList()) {
-                    wayChildren.add(toSdkSelection(ch)); // should end up UF
-                }
-                return WaysSelection.newBuilder()
-                        .setSelections(wayChildren)
-                        .build();
-
-            case SYSTEM:
-                List<Selection> sysChildren = new ArrayList<>();
-                for (protobuf.MTSSelection ch : s.getSelectionsList()) {
-                    sysChildren.add(toSdkSelection(ch)); // UF or WAYS
-                }
-                List<Integer> sizes = new ArrayList<>();
-                for (long sz : s.getSizeList()) sizes.add((int) sz);
-
-                return SystemSelection.newBuilder()
-                        .setSelections(sysChildren)
-                        .setSize(sizes)
-                        .build();
-
-            default:
-                throw new IllegalArgumentException("Unknown selection type: " + s.getType());
-        }
-    }
-
-    private UfSelection toUf(protobuf.MTSSelection s) {
+    private UfSelection toUf(MTSSelection s) {
         String eventUrn = "sr:match:" + s.getMatchID();
 
         UfSelection.Builder sb = UfSelection.newBuilder()
@@ -213,5 +182,46 @@ public class BetPending implements Runnable {
             if (!specifier.isBlank()) sb.setSpecifiers(specifier);
         }
         return sb.build();
+    }
+
+    private Selection buildSelectionTree(MTSSelection node) {
+        switch (node.getType()) {
+            case UF: {
+                return toUf(node);
+            }
+
+            case WAYS: {
+                List<Selection> children = new ArrayList<>();
+                for (int i = 0; i < node.getSelectionsCount(); i++) {
+                    children.add(buildSelectionTree(node.getSelections(i)));
+                }
+
+                WaysSelection.Builder wb = Selection.newWaysSelectionBuilder()
+                        .setSelections(children);
+
+                return wb.build();
+            }
+
+            case SYSTEM: {
+                List<Selection> children = new ArrayList<>();
+                for (int i = 0; i < node.getSelectionsCount(); i++) {
+                    children.add(buildSelectionTree(node.getSelections(i)));
+                }
+
+                List<Integer> sizes = new ArrayList<>();
+                for (int i = 0; i < node.getSizeCount(); i++) {
+                    sizes.add((int) node.getSize(i));
+                }
+
+                SystemSelection.Builder sysb = Selection.newSystemSelectionBuilder()
+                        .setSelections(children)
+                        .setSize(sizes);
+
+                return sysb.build();
+            }
+
+            default:
+                throw new IllegalArgumentException("Unsupported selection type: " + node.getType());
+        }
     }
 }
