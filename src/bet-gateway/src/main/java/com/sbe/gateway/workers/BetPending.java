@@ -24,6 +24,7 @@ import protobuf.MTSSelection;
 import protobuf.MTSTicket;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -73,7 +74,7 @@ public class BetPending implements Runnable {
         for (MTSBet obj : object.getBetsList()) {
             // build bets array
             Stake stake = Stake.newCashStakeBuilder()
-                    .setAmount(BigDecimal.valueOf(obj.getStake()))
+                    .setAmount(new BigDecimal(obj.getStake()).setScale(2, RoundingMode.DOWN))
                     .setCurrency(mts_currency)
                     .build();
 

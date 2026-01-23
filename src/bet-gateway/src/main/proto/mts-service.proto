@@ -27,7 +27,7 @@ service Mts {
 }
 
 message MTSBet {
-  float stake = 1;
+  string stake = 1;
   string betType = 7;
   repeated MTSSelection selections = 8;
 }
