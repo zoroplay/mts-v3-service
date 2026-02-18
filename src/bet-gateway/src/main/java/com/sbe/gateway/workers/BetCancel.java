@@ -1,5 +1,9 @@
 package com.sbe.gateway.workers;
 
+import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
 import com.sbe.gateway.BettingClient;
 import com.sbe.gateway.handlers.BetCancelResponseHandler;
 import com.sportradar.mbs.sdk.MbsSdk;
@@ -20,9 +24,9 @@ public class BetCancel implements Runnable {
     MbsSdk mbsSdk;
     BettingClient bettingClient;
     public BetCancelRequest message;
-//    private static final ObjectMapper MAPPER = new ObjectMapper()
-//            .enable(SerializationFeature.INDENT_OUTPUT)        // pretty-print
-//            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
+    private static final ObjectMapper MAPPER = new ObjectMapper()
+            .enable(SerializationFeature.INDENT_OUTPUT)        // pretty-print
+            .setSerializationInclusion(JsonInclude.Include.NON_NULL);
     public BetCancel(MbsSdk mbsSdk, BettingClient bettingClient, BetCancelRequest message){
         this.mbsSdk = mbsSdk;
         this.message = message;
@@ -71,6 +75,13 @@ public class BetCancel implements Runnable {
                             .setCancellationSignature(resp.getSignature())
                             .setAcknowledged(internalOk) // true iff betting-service processed successfully
                             .build();
+
+                    try {
+                        String json = MAPPER.writeValueAsString(ackReq);
+                        log.info("BetCancel request for ticketId {}:\n{}", ticketId, json);
+                    } catch (JsonProcessingException ignored) {
+
+                    }
 
                     return ticketProtocol.sendCancelAckAsync(ackReq)
                             .thenAccept(ackResp -> log.info(

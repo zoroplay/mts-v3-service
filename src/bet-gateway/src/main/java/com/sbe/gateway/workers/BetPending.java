@@ -109,7 +109,7 @@ public class BetPending implements Runnable {
 
         try {
             String json = MAPPER.writeValueAsString(ticketRequest);
-            log.info("BetPending thread started: sending ticket request for ticketId {}:\n{} message:\n{}", ticketId, json,message);
+//            log.info("BetPending thread started: sending ticket request for ticketId {}:\n{} message:\n{}", ticketId, json,message);
         } catch (JsonProcessingException e) {
 //            throw new RuntimeException(e);
         }
