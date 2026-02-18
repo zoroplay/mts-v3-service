@@ -71,6 +71,7 @@ public class BetCancel implements Runnable {
                     // 3) Send ACK/non-ACK back to MTS
                     CancelAckRequest ackReq = CancelAckRequest.newBuilder()
                             .setTicketId(ticketId)
+                            .setCancellationId(ticketId)
                             .setCancellationId(resp.getCancellationId())
                             .setCancellationSignature(resp.getSignature())
                             .setAcknowledged(internalOk) // true iff betting-service processed successfully
