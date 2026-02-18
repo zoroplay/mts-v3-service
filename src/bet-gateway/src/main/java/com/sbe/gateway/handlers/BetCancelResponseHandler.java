@@ -20,12 +20,6 @@ public record BetCancelResponseHandler(BettingClient bettingClient) {
         String[] split = ticketId.split("_");
         ticketId = split[split.length - 1];
 
-        if (resp.getStatus() == AcceptanceStatus.ACCEPTED) {
-            bettingClient.cancelBetAcceptedResponse(code, "Ok", ticketId);
-        } else {
-            bettingClient.cancelBetRejectedResponse(code, resp.getMessage(), ticketId);
-        }
-
         try {
             if (resp.getStatus() == AcceptanceStatus.ACCEPTED) {
                 bettingClient.cancelBetAcceptedResponse(code, "Ok", ticketId);
