@@ -52,6 +52,7 @@ public class BetCancel implements Runnable {
                                 .setCode((int) code)
                                 .build()
                 )
+                .setCancellationId(ticketId)
                 .build();
 
 //        String json = MAPPER.writeValueAsString(ticketRequest);
@@ -71,7 +72,6 @@ public class BetCancel implements Runnable {
                     // 3) Send ACK/non-ACK back to MTS
                     CancelAckRequest ackReq = CancelAckRequest.newBuilder()
                             .setTicketId(ticketId)
-                            .setCancellationId(ticketId)
                             .setCancellationId(resp.getCancellationId())
                             .setCancellationSignature(resp.getSignature())
                             .setAcknowledged(internalOk) // true iff betting-service processed successfully
