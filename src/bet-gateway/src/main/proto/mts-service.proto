@@ -68,7 +68,8 @@ message MTSSelection {
 
 
 message MtsGeneralAck {
-  string description = 1;
+  bool ok = 1;
+  string description = 2;
 }
 
 message BetCancelRequest {

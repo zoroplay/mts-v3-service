@@ -5,11 +5,14 @@ import com.sbe.gateway.handlers.BetCancelResponseHandler;
 import com.sportradar.mbs.sdk.MbsSdk;
 import com.sportradar.mbs.sdk.entities.cancellation.TicketCancelDetails;
 import com.sportradar.mbs.sdk.entities.common.*;
+import com.sportradar.mbs.sdk.entities.request.CancelAckRequest;
 import com.sportradar.mbs.sdk.entities.request.CancelRequest;
 import com.sportradar.mbs.sdk.protocol.TicketProtocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import protobuf.BetCancelRequest;
+
+import java.util.concurrent.CompletableFuture;
 
 public class BetCancel implements Runnable {
 
@@ -51,13 +54,37 @@ public class BetCancel implements Runnable {
 //        log.info("BetPending thread started: sending ticket request for ticketId {}:\n{}", ticketId, json);
 
         ticketProtocol
-                .sendCancelAsync(ticketRequest)  // returns CompletableFuture<TicketResponse>
-                .thenAccept(resp -> {
-                    responseHandler.onTicketResponse(ticketId, resp);
+                .sendCancelAsync(ticketRequest)
+                .thenCompose(resp -> {
+                    // 1) Notify betting-service first (your existing step) AND get internal success boolean
+                    boolean internalOk = responseHandler.onTicketResponse(ticketId, resp);
+
+                    // 2) Only send cancel-ack when MTS accepted the cancellation
+                    if (resp.getStatus() != AcceptanceStatus.ACCEPTED) {
+                        return CompletableFuture.completedFuture(null);
+                    }
+
+                    // 3) Send ACK/non-ACK back to MTS
+                    CancelAckRequest ackReq = CancelAckRequest.newBuilder()
+                            .setTicketId(ticketId)
+                            .setCancellationId(resp.getCancellationId())
+                            .setCancellationSignature(resp.getSignature())
+                            .setAcknowledged(internalOk) // true iff betting-service processed successfully
+                            .build();
+
+                    return ticketProtocol.sendCancelAckAsync(ackReq)
+                            .thenAccept(ackResp -> log.info(
+                                    "CancelAckReply ticketId={} status={} code={} msg={}",
+                                    ticketId, ackResp.getStatus(), ackResp.getCode(), ackResp.getMessage()
+                            ));
                 })
                 .exceptionally(ex -> {
-                    log.error("BetPending thread finished: sending ticket exception", ex);
+                    log.error("BetCancel: cancel/ack flow exception", ex);
+
+                    // best-effort: notify betting-service of failure
                     responseHandler.onTicketError(ticketId);
+
+                    // NOTE: if sendCancelAsync threw before we got a response, we cannot send cancel-ack
                     return null;
                 });
     }

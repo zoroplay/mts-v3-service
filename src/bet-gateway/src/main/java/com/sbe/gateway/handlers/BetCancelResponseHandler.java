@@ -10,9 +10,9 @@ public record BetCancelResponseHandler(BettingClient bettingClient) {
     private static final Logger log = LoggerFactory.getLogger(BetCancelResponseHandler.class);
 
     /**
-     * Called when MTS replies to a ticket submission.
+     * @return true if betting-service successfully processed the cancellation (so we should ACK=true to MTS)
      */
-    public void onTicketResponse(String ticketId, CancelResponse resp) {
+    public boolean onTicketResponse(String ticketId, CancelResponse resp) {
         log.debug("BetCancelResponseHandler | Received ticket response for ticketId={}", resp);
         int code = resp.getCode();
 
@@ -24,6 +24,26 @@ public record BetCancelResponseHandler(BettingClient bettingClient) {
             bettingClient.cancelBetAcceptedResponse(code, "Ok", ticketId);
         } else {
             bettingClient.cancelBetRejectedResponse(code, resp.getMessage(), ticketId);
+        }
+
+        try {
+            if (resp.getStatus() == AcceptanceStatus.ACCEPTED) {
+                bettingClient.cancelBetAcceptedResponse(code, "Ok", ticketId);
+                return true;
+            } else {
+                bettingClient.cancelBetRejectedResponse(code, resp.getMessage(), ticketId);
+                return false;
+            }
+        } catch (Exception e) {
+            // If betting-service call failed, return false so BetCancel sends acknowledged=false
+            log.error("BetCancelResponseHandler | betting-service call failed for betId={}", ticketId, e);
+
+            // optional best-effort: record as rejected on betting-service
+            try {
+                bettingClient.cancelBetRejectedResponse(500, "internal cancel processing failed", ticketId);
+            } catch (Exception ignored) {}
+
+            return false;
         }
     }
 
