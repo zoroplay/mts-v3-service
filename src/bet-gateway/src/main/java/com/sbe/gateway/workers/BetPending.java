@@ -145,6 +145,7 @@ public class BetPending implements Runnable {
         if (source == 5) {
             channel = Channel.newRetailChannelBuilder()
                     .setLang("EN")
+                    .setShopId("1")
                     .build();
         }
         if (source == 6) {
