@@ -18,7 +18,7 @@ env:
 
 jobs:
   version:
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
     steps:
@@ -59,7 +59,7 @@ jobs:
 
   build:
     needs: version
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -101,7 +101,7 @@ jobs:
 
   release:
     needs: [version, build]
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/staging'
     steps:
       - name: Checkout code
@@ -133,7 +133,7 @@ jobs:
 
   deploy:
     needs: [version, build, release]
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/staging'
     steps:
       - name: Checkout code
@@ -203,7 +203,7 @@ jobs:
 
   deploy-production:
     needs: [version, build, release]
-    runs-on: self-hosted
+    runs-on: ubuntu-latest
     if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
     steps:
       - name: Checkout code
