@@ -38,7 +38,7 @@
   </scm>
 
     <modules>
-        <module>sdk</module>
+<!--        <module>sdk</module>-->
         <module>bet-gateway</module>
     </modules>
 

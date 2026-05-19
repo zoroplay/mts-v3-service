@@ -22,6 +22,7 @@ import protobuf.MTSCashoutRequest;
 import protobuf.MTSCashoutResponse;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.concurrent.CompletableFuture;
 
 public class CashoutPending implements Runnable {
@@ -53,6 +54,7 @@ public class CashoutPending implements Runnable {
         boolean isBuild = req.getIsBuild();
         double requestedPayout = req.getRequestedPayout();
         double requestedPercent = req.getRequestedPercent();
+        log.info("Cashout request for ticket {} (build={}): requestedPayout: {} requestedPercent: {}", ticketId, isBuild,requestedPayout,requestedPercent);
 
         int limitID = Integer.parseInt(System.getenv("mts_limit_id"));
 
@@ -74,8 +76,11 @@ public class CashoutPending implements Runnable {
             CashoutRequest.Builder cashoutBuilder = CashoutRequest.newBuilder()
                     .setCashoutId(ticketId);
 
+            BigDecimal payoutAmount = BigDecimal
+                    .valueOf(requestedPayout)
+                    .setScale(8, RoundingMode.DOWN);
             CashPayout payout = CashPayout.newBuilder()
-                    .setAmount(BigDecimal.valueOf(requestedPayout)) // MUST be set by Go
+                    .setAmount(payoutAmount)
                     .setCurrency(mtsCurrency)
                     .build();
             if (isBuild) {
@@ -91,7 +96,7 @@ public class CashoutPending implements Runnable {
             } else {
                 // CASHOUT-PLACEMENT
                 if (requestedPercent > 0 && requestedPercent < 1.0) {
-                    // Partial cashout by percent
+                    // Partial cashout
                     TicketPartialCashoutDetails details = TicketPartialCashoutDetails.newBuilder()
                             .setTicketId(ticketId)
                             .setCode(100)
@@ -100,18 +105,8 @@ public class CashoutPending implements Runnable {
                             .setPayout(payout)
                             .build();
                     cashoutBuilder.setDetails(details);
-
-                } else if (requestedPayout > 0) {
-                    TicketPartialCashoutDetails details = TicketPartialCashoutDetails.newBuilder()
-                            .setTicketId(ticketId)
-                            .setCode(100)
-                            .setTicketSignature(req.getSignature())
-                            .setPayout(payout)
-                            .build();
-                    cashoutBuilder.setDetails(details);
-
                 } else {
-                    // Full ticket cashout with default strategy
+                    // Full cashout
                     TicketCashoutDetails details = TicketCashoutDetails.newBuilder()
                             .setTicketId(ticketId)
                             .setCode(100)
@@ -120,6 +115,7 @@ public class CashoutPending implements Runnable {
                             .build();
                     cashoutBuilder.setDetails(details);
                 }
+
             }
 
             CashoutRequest cashoutRequest = cashoutBuilder.build();
@@ -180,7 +176,7 @@ public class CashoutPending implements Runnable {
             }
 
         } catch (Exception e) {
-            log.error("Unexpected error building cashout request for ticket {}", ticketId, e);
+            log.error("Unexpected error building cashout request for ticket: {}", ticketId, e);
             MTSCashoutResponse out = MTSCashoutResponse.newBuilder()
                     .setBetID(ticketId)
                     .setIsBuild(isBuild)
@@ -194,9 +190,8 @@ public class CashoutPending implements Runnable {
     }
 
     /**
-     * Map a CashoutBuildResponse (cashout-build) to your gRPC MTSCashoutResponse.
+     * Maps a CashoutBuildResponse (cashout-build) to gRPC MTSCashoutResponse.
      * CashoutBuildResponse has status, message, ticketId, cashoutId, and a CashoutSuggestions object
-     * where you can later pull suggested payout values if you need them. :contentReference[oaicite:2]{index=2}
      */
     private MTSCashoutResponse mapBuildResponse(CashoutBuildResponse resp, String ticketId) {
         MTSCashoutResponse.Builder out = MTSCashoutResponse.newBuilder()
@@ -255,8 +250,8 @@ public class CashoutPending implements Runnable {
     }
 
     /**
-     * Map a CashoutResponse (cashout placement) to your gRPC MTSCashoutResponse.
-     * Note: CashoutResponse in this SDK does NOT carry a payout amount, only status/message/etc. :contentReference[oaicite:3]{index=3}
+     * Maps a CashoutResponse (cashout placement) to gRPC MTSCashoutResponse.
+     * Note: CashoutResponse in this SDK does NOT carry a payout amount, only status/message/etc
      */
     private MTSCashoutResponse mapPlacementResponse(CashoutPlacementResponse resp, String ticketId) {
         MTSCashoutResponse.Builder out = MTSCashoutResponse.newBuilder()

@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  mts-service:
+    image: ghcr.io/zoroplay/mts-v3-service:latest
+    env_file:
+      - .env
+    ports:
+      - "8080:8080"
+      - "9010:9010"
+    networks:
+      - sbenet
+  
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 1024M
+        reservations:
+          cpus: '0.25'
+          memory: 512M
+    restart: unless-stopped
+
+networks:
+  sbenet:
+    external: true
+    

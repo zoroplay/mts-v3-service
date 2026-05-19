@@ -21,36 +21,55 @@ option java_multiple_files = true;
 
 // The Betting service definition.
 service Mts {
-  rpc SubmitBet(MTSBet) returns (MtsGeneralAck) {}
+  rpc SubmitBet(MTSTicket) returns (MtsGeneralAck) {}
   rpc SubmitBetCancel(BetCancelRequest) returns (MtsGeneralAck) {}
   rpc SubmitCashout(MTSCashoutRequest) returns (MTSCashoutResponse) {}
 }
 
-message MTSBetSlip {
-
-  int64 sportID = 1;
-  int64 producerID = 2;
-  int64 matchID = 3;
-  int64 marketID = 4;
-  string specifier = 5;
-  string outcomeID = 6;
-  float odds = 7;
-}
-
 message MTSBet {
-  float stake = 1;
-  int64 profileID = 2;
-  int64 betSource = 3;
-  string ipAddress = 4;
-  string betID = 5;
-  string returnChannel = 6;
-  repeated MTSBetSlip bets = 7;
-  string betType = 8;
-  repeated int64 systemSizes = 9;
+  string stake = 1;
+  string betType = 7;
+  repeated MTSSelection selections = 8;
 }
+
+message MTSTicket {
+  int64 profileID = 1;
+  int64 betSource = 2;
+  string ipAddress = 3;
+  string betID = 4;
+  string returnChannel = 5;
+  repeated MTSBet bets = 6;
+}
+
+message MTSSelection {
+  enum SelectionType {
+    UF = 0;     // normal selection
+    WAYS = 1;   // ways selection (nested UF)
+    SYSTEM = 2; // system selection (nested UF/WAYS)
+  }
+
+  SelectionType type = 1;
+
+  // UF fields (only used when type == UF)
+  int64 sportID = 2;
+  int64 producerID = 3;
+  int64 matchID = 4;
+  int64 marketID = 5;
+  string specifier = 6;
+  string outcomeID = 7;
+  float odds = 8;
+
+  // Nested selections (WAYS and SYSTEM)
+  repeated MTSSelection selections = 9;
+
+  // SYSTEM sizes (multi-system supported): e.g. [3] or [1,2,4]
+  repeated int64 size = 10;
+}
+
 
 message MtsGeneralAck {
-  string description = 1;
+  bool ok = 1;
+  string description = 2;
 }
 
 message BetCancelRequest {

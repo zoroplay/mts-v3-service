@@ -1,6 +1,7 @@
 package com.sbe.gateway.workers;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.sbe.gateway.BettingClient;
@@ -13,14 +14,17 @@ import com.sportradar.mbs.sdk.entities.request.TicketRequest;
 import com.sportradar.mbs.sdk.entities.selection.Selection;
 import com.sportradar.mbs.sdk.entities.selection.SystemSelection;
 import com.sportradar.mbs.sdk.entities.selection.UfSelection;
+import com.sportradar.mbs.sdk.entities.selection.WaysSelection;
 import com.sportradar.mbs.sdk.entities.stake.Stake;
 import com.sportradar.mbs.sdk.protocol.TicketProtocol;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import protobuf.MTSBet;
-import protobuf.MTSBetSlip;
+import protobuf.MTSSelection;
+import protobuf.MTSTicket;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -29,11 +33,11 @@ public class BetPending implements Runnable {
     private static final Logger log = LoggerFactory.getLogger(BetPending.class);
     MbsSdk mbsSdk;
     BettingClient bettingClient;
-    public MTSBet message;
+    public MTSTicket message;
     private static final ObjectMapper MAPPER = new ObjectMapper()
             .enable(SerializationFeature.INDENT_OUTPUT)        // pretty-print
             .setSerializationInclusion(JsonInclude.Include.NON_NULL);
-    public BetPending(MbsSdk mbsSdk,BettingClient bettingClient, MTSBet message){
+    public BetPending(MbsSdk mbsSdk,BettingClient bettingClient, MTSTicket message){
         this.mbsSdk = mbsSdk;
         this.message = message;
         this.bettingClient = bettingClient;
@@ -46,7 +50,7 @@ public class BetPending implements Runnable {
         BetPendingResponseHandler responseHandler = new BetPendingResponseHandler(bettingClient);
 
         // 2. Build the TicketRequest
-        MTSBet object = message;
+        MTSTicket object = message;
         String ticketId = System.getenv("mts_bookmaker_id") + "_" + object.getBetID();
         String mts_currency = System.getenv("mts_currency");
         int limitID = Integer.parseInt(System.getenv("mts_limit_id"));
@@ -66,78 +70,33 @@ public class BetPending implements Runnable {
                 .setLimitId(limitID)
                 .build();
 
-        // build bets array
-        Stake stake = Stake.newCashStakeBuilder()
-                .setAmount(BigDecimal.valueOf(object.getStake()))
-                .setCurrency(mts_currency)
-                .build();
-        // Create a bet builder and loop through selections
-        List<Selection> ufSelections = new ArrayList<>();
-        for (int i = 0; i < object.getBetsCount(); i++) {
-            MTSBetSlip slip = object.getBets(i);
-
-            String eventUrn = "sr:match:" + slip.getMatchID();
-
-            UfSelection.Builder sb = UfSelection.newBuilder()
-                    .setEventId(eventUrn)
-                    .setProductId(String.valueOf(slip.getProducerID()))
-                    .setMarketId(String.valueOf(slip.getMarketID()))
-                    .setOutcomeId(slip.getOutcomeID())
-                    .setOdds(
-                            Odds.newDecimalOddsBuilder()
-                                    .setValue(new BigDecimal(String.valueOf(slip.getOdds())))
-                                    .build()
-                    );
-
-            // only set specifiers if market requires it
-            String specifier = slip.getSpecifier();
-            specifier = specifier.replace("?", "&");
-            if (!specifier.isBlank()) {
-                sb.setSpecifiers(specifier);
-            }
-
-            ufSelections.add(sb.build());
-        }
-
         List<Bet> bets = new ArrayList<>();
-        if ("system".equalsIgnoreCase(object.getBetType())) {
-
-            // systemSizes => the "size" array in JSON, e.g. [3] for 3/4
-            List<Integer> sizes = new ArrayList<>();
-            for (int i = 0; i < object.getSystemSizesCount(); i++) {
-                sizes.add((int) object.getSystemSizes(i));
-            }
-
-            SystemSelection systemSelection = SystemSelection.newBuilder()
-                    .setSelections(ufSelections)
-                    .setSize(sizes)
+        for (MTSBet obj : object.getBetsList()) {
+            // build bets array
+            Stake stake = Stake.newCashStakeBuilder()
+                    .setAmount(new BigDecimal(obj.getStake()).setScale(2, RoundingMode.DOWN))
+                    .setCurrency(mts_currency)
                     .build();
 
-            List<Selection> selections = new ArrayList<>();
-            selections.add(systemSelection);
+            // Create a bet builder and loop through selections
+            List<Selection> betSelections = new ArrayList<>();
+
+            if (obj.getSelectionsCount() > 0) {
+                // structured mode (supports system/ways/bankers/multisystem)
+                for (int i = 0; i < obj.getSelectionsCount(); i++) {
+                    betSelections.add(buildSelectionTree(obj.getSelections(i)));
+                }
+            }
 
             Bet bet = Bet.newBuilder()
                     .setStake(stake)
-                    .setSelections(selections)
+                    .setSelections(betSelections)
                     .setContext(
                             BetContext.newBuilder()
                                     .setOddsChange(OddsChange.ANY)
                                     .build()
                     )
                     .build();
-
-            bets.add(bet);
-
-        } else {
-
-            Bet bet = Bet.newBuilder()
-                    .setStake(stake)
-                    .setSelections(ufSelections)
-                    .setContext(
-                            BetContext.newBuilder()
-                                    .setOddsChange(OddsChange.ANY)
-                                    .build()
-                    ).build();
 
             bets.add(bet);
         }
@@ -148,8 +107,12 @@ public class BetPending implements Runnable {
                 .setBets(bets)
                 .build();
 
-//        String json = MAPPER.writeValueAsString(ticketRequest);
-//        log.info("BetPending thread started: sending ticket request for ticketId {}:\n{}", ticketId, json);
+        try {
+            String json = MAPPER.writeValueAsString(ticketRequest);
+            log.info("BetPending thread started: sending ticket request for ticketId {}:\n{} message:\n{}", ticketId, json,message);
+        } catch (JsonProcessingException e) {
+//            throw new RuntimeException(e);
+        }
 
         ticketProtocol
                 .sendTicketAsync(ticketRequest)  // returns CompletableFuture<TicketResponse>
@@ -162,6 +125,7 @@ public class BetPending implements Runnable {
                     return null;
                 });
     }
+
     private Channel getChannel(long source, String ipAddress){
         Channel channel = Channel.newInternetChannelBuilder()
                 .setIp(ipAddress)
@@ -181,6 +145,7 @@ public class BetPending implements Runnable {
         if (source == 5) {
             channel = Channel.newRetailChannelBuilder()
                     .setLang("EN")
+                    .setShopId("1")
                     .build();
         }
         if (source == 6) {
@@ -205,5 +170,68 @@ public class BetPending implements Runnable {
                     .build();
         }
         return channel;
+    }
+
+    private UfSelection toUf(MTSSelection s) {
+        String eventUrn = "sr:match:" + s.getMatchID();
+
+        UfSelection.Builder sb = UfSelection.newBuilder()
+                .setEventId(eventUrn)
+                .setProductId(String.valueOf(s.getProducerID()))
+                .setMarketId(String.valueOf(s.getMarketID()))
+                .setOutcomeId(s.getOutcomeID())
+                .setOdds(
+                        Odds.newDecimalOddsBuilder()
+                                .setValue(new BigDecimal(String.valueOf(s.getOdds())))
+                                .build()
+                );
+
+        String specifier = s.getSpecifier();
+        if (specifier != null) {
+            specifier = specifier.replace("?", "&");
+            if (!specifier.isBlank()) sb.setSpecifiers(specifier);
+        }
+        return sb.build();
+    }
+
+    private Selection buildSelectionTree(MTSSelection node) {
+        switch (node.getType()) {
+            case UF: {
+                return toUf(node);
+            }
+
+            case WAYS: {
+                List<Selection> children = new ArrayList<>();
+                for (int i = 0; i < node.getSelectionsCount(); i++) {
+                    children.add(buildSelectionTree(node.getSelections(i)));
+                }
+
+                WaysSelection.Builder wb = Selection.newWaysSelectionBuilder()
+                        .setSelections(children);
+
+                return wb.build();
+            }
+
+            case SYSTEM: {
+                List<Selection> children = new ArrayList<>();
+                for (int i = 0; i < node.getSelectionsCount(); i++) {
+                    children.add(buildSelectionTree(node.getSelections(i)));
+                }
+
+                List<Integer> sizes = new ArrayList<>();
+                for (int i = 0; i < node.getSizeCount(); i++) {
+                    sizes.add((int) node.getSize(i));
+                }
+
+                SystemSelection.Builder sysb = Selection.newSystemSelectionBuilder()
+                        .setSelections(children)
+                        .setSize(sizes);
+
+                return sysb.build();
+            }
+
+            default:
+                throw new IllegalArgumentException("Unsupported selection type: " + node.getType());
+        }
     }
 }

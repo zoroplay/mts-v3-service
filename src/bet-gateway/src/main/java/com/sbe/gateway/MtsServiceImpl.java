@@ -25,7 +25,7 @@ public class MtsServiceImpl extends MtsGrpc.MtsImplBase {
     }
 
     @Override
-    public void submitBet(MTSBet req, StreamObserver<MtsGeneralAck> out) {
+    public void submitBet(MTSTicket req, StreamObserver<MtsGeneralAck> out) {
         log.info("Submitting Bet");
         try {
             executor.submit(new BetPending(sdk,bettingClient, req));
