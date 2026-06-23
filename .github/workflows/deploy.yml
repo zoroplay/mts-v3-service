@@ -2,9 +2,9 @@ name: Build and Deploy
 
 on:
   push:
-    branches: [ main, master, staging ]
+    branches: [ main, hetz-prod, staging ]
   pull_request:
-    branches: [ main, master, staging ]
+    branches: [ main, hetz-prod, staging ]
 
 permissions:
   contents: write
@@ -88,6 +88,7 @@ jobs:
             type=raw,value=${{ needs.version.outputs.version }}
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=staging,enable=${{ github.ref == 'refs/heads/staging' }}
+            type=raw,value=hetz-prod,enable=${{ github.ref == 'refs/heads/hetz-prod' }}
 
       - name: Build and push Docker image
         uses: docker/build-push-action@v5
@@ -102,7 +103,7 @@ jobs:
   release:
     needs: [version, build]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master' || github.ref == 'refs/heads/staging'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/hetz-prod' || github.ref == 'refs/heads/staging'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -165,36 +166,20 @@ jobs:
           ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_IP }} 'echo "SSH connection successful"' || echo "SSH connection failed"
 
       - name: Create .env file
-        run: |
-          # Determine which environment file to use based on branch
-          if [ "${{ github.ref }}" = "refs/heads/staging" ]; then
-            cp .env.staging .env
-          elif [ "${{ github.ref }}" = "refs/heads/main" ] || [ "${{ github.ref }}" = "refs/heads/master" ]; then
-            cp .env.production .env
-          else
-            echo "Unknown branch, using staging config"
-            cp .env.staging .env
-          fi
+        run: cp .env.staging .env
 
       - name: Prepare deployment files
         run: |
           NEXT_VERSION=$(cat .VERSION | tr -d "[:space:]\"'" | xargs)
           echo "Deploying version: $NEXT_VERSION"
-          
-          # Update docker-compose with new image version
           sed -i "s|image: ghcr.io.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$NEXT_VERSION|g" docker-compose.yml
 
       - name: Deploy to STAGING server
         run: |
-          # Create directory on server
           ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_IP }} 'mkdir -p ~/mts-v3-service/'
-          
-          # Copy files to server
           scp -o StrictHostKeyChecking=no .env ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_IP }}:~/mts-v3-service/
           scp -o StrictHostKeyChecking=no docker-compose.yml ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_IP }}:~/mts-v3-service/
           scp -o StrictHostKeyChecking=no deploy.sh ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_IP }}:~/mts-v3-service/
-          
-          # Login to GitHub Container Registry on server and execute deployment
           ssh -o StrictHostKeyChecking=no ${{ secrets.STAGING_SERVER_USER }}@${{ secrets.STAGING_SERVER_IP }} '
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             chmod +x ~/mts-v3-service/deploy.sh
@@ -204,7 +189,7 @@ jobs:
   deploy-production:
     needs: [version, build, release]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/master'
+    if: github.ref == 'refs/heads/main' || github.ref == 'refs/heads/hetz-prod'
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -214,21 +199,40 @@ jobs:
           echo "${{ needs.version.outputs.version }}" > .VERSION
           echo "Version from previous job: ${{ needs.version.outputs.version }}"
 
-      - name: Create .env file
+      - name: Set up SSH
         run: |
-          cp .env.production .env
+          if [ -z "${{ secrets.PROD_SERVER_IP }}" ]; then
+            echo "Error: PROD_SERVER_IP secret is not set"
+            exit 1
+          fi
+          if [ -z "${{ secrets.SSH_PRIVATE_KEY }}" ]; then
+            echo "Error: SSH_PRIVATE_KEY secret is not set"
+            exit 1
+          fi
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keygen -l -f ~/.ssh/id_rsa || echo "SSH key format issue"
+          ssh-keyscan -H ${{ secrets.PROD_SERVER_IP }} >> ~/.ssh/known_hosts || echo "Failed to scan host"
+          ssh -o ConnectTimeout=10 -o StrictHostKeyChecking=no ${{ secrets.PROD_SERVER_USER }}@${{ secrets.PROD_SERVER_IP }} 'echo "SSH connection successful"' || echo "SSH connection failed"
+
+      - name: Create .env file
+        run: echo "${{ secrets.ENV_PROD }}" > .env
 
       - name: Prepare deployment files
         run: |
           NEXT_VERSION=$(cat .VERSION | tr -d "[:space:]\"'" | xargs)
           echo "Deploying version: $NEXT_VERSION"
-          
-          # Update docker-compose with new image version
           sed -i "s|image: ghcr.io.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$NEXT_VERSION|g" docker-compose.yml
 
       - name: Deploy to PRODUCTION server
         run: |
-          echo "Production deployment would go here"
-          echo "Configure PRODUCTION_SERVER_IP, PRODUCTION_SERVER_USER secrets for actual deployment"
-
- # ci trigger....
+          ssh -o StrictHostKeyChecking=no ${{ secrets.PROD_SERVER_USER }}@${{ secrets.PROD_SERVER_IP }} 'mkdir -p ~/mts-v3-service/'
+          scp -o StrictHostKeyChecking=no .env ${{ secrets.PROD_SERVER_USER }}@${{ secrets.PROD_SERVER_IP }}:~/mts-v3-service/
+          scp -o StrictHostKeyChecking=no docker-compose.yml ${{ secrets.PROD_SERVER_USER }}@${{ secrets.PROD_SERVER_IP }}:~/mts-v3-service/
+          scp -o StrictHostKeyChecking=no deploy.sh ${{ secrets.PROD_SERVER_USER }}@${{ secrets.PROD_SERVER_IP }}:~/mts-v3-service/
+          ssh -o StrictHostKeyChecking=no ${{ secrets.PROD_SERVER_USER }}@${{ secrets.PROD_SERVER_IP }} '
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+            chmod +x ~/mts-v3-service/deploy.sh
+            bash ~/mts-v3-service/deploy.sh
+          '
