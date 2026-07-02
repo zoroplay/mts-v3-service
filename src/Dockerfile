@@ -28,17 +28,17 @@ COPY --from=builder /app/bet-gateway/target/bet-gateway-1.0.0-all.jar /app/app.j
 EXPOSE 9010
 
 # Environment (override at runtime)
-ENV MBS_WS_SERVER="wss://wss.dataplane-nonprod.sportradar.dev" \
-    MBS_AUTH_SERVER="https://auth.sportradar.com/oauth/token" \
-    MBS_CLIENT_ID="0BUCPReZtlxw4OvdAJpUWFSyQf77QeIW" \
-    MBS_CLIENT_SECRET="5TtmC7b60RbTytGzZJAzL7szTcg5R_D6_O0wuHkPtDV3N5rbQRh-iH-VFfLjo06-" \
-    MBS_AUDIENCE="mbs-dp-non-prod-wss" \
-    MBS_OPERATOR_ID="37228" \
-    mts_bookmaker_id="37228" \
-    mts_currency="USD" \
-    mts_limit_id="2881" \
-    GRPC_PORT="9010"\
-    BETTING_SERVICE_HOST="host.docker.internal" \
-    BETTING_SERVICE_GRPC_PORT="3001"
+#ENV MBS_WS_SERVER="wss://wss.dataplane-nonprod.sportradar.dev" \
+#    MBS_AUTH_SERVER="https://auth.sportradar.com/oauth/token" \
+#    MBS_CLIENT_ID="0BUCPReZtlxw4OvdAJpUWFSyQf77QeIW" \
+#    MBS_CLIENT_SECRET="5TtmC7b60RbTytGzZJAzL7szTcg5R_D6_O0wuHkPtDV3N5rbQRh-iH-VFfLjo06-" \
+#    MBS_AUDIENCE="mbs-dp-non-prod-wss" \
+#    MBS_OPERATOR_ID="37228" \
+#    mts_bookmaker_id="37228" \
+#    mts_currency="USD" \
+#    mts_limit_id="2881" \
+#    GRPC_PORT="9010"\
+#    BETTING_SERVICE_HOST="host.docker.internal" \
+#    BETTING_SERVICE_GRPC_PORT="3001"
 
 ENTRYPOINT ["java","-jar","/app/app.jar"]
