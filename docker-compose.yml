@@ -14,11 +14,9 @@ services:
     deploy:
       resources:
         limits:
-          cpus: '0.5'
-          memory: 1024M
+          memory: 2048M
         reservations:
-          cpus: '0.25'
-          memory: 512M
+          memory: 256M
     restart: unless-stopped
 
 networks:
