@@ -21,6 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       version: ${{ steps.version.outputs.version }}
+      image_name: ${{ steps.image.outputs.image_name }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -49,6 +50,10 @@ jobs:
           VERSION=$(cat .VERSION | tr -d "[:space:]\"'" | xargs)
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "Generated version: $VERSION"
+
+      - name: Set lowercase image name
+        id: image
+        run: echo "image_name=$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
       - name: Upload version artifact
         uses: actions/upload-artifact@v4
@@ -83,7 +88,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ needs.version.outputs.image_name }}
           tags: |
             type=raw,value=${{ needs.version.outputs.version }}
             type=raw,value=latest,enable={{is_default_branch}}
@@ -182,7 +187,7 @@ jobs:
           echo "Deploying version: $NEXT_VERSION"
           
           # Update docker-compose with new image version
-          sed -i "s|image: ghcr.io.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$NEXT_VERSION|g" docker-compose.yml
+          sed -i "s|image: ghcr.io.*|image: ${{ env.REGISTRY }}/${{ needs.version.outputs.image_name }}:$NEXT_VERSION|g" docker-compose.yml
 
       - name: Deploy to STAGING server
         run: |
@@ -224,7 +229,7 @@ jobs:
           echo "Deploying version: $NEXT_VERSION"
           
           # Update docker-compose with new image version
-          sed -i "s|image: ghcr.io.*|image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$NEXT_VERSION|g" docker-compose.yml
+          sed -i "s|image: ghcr.io.*|image: ${{ env.REGISTRY }}/${{ needs.version.outputs.image_name }}:$NEXT_VERSION|g" docker-compose.yml
 
       - name: Deploy to PRODUCTION server
         run: |
