@@ -46,6 +46,7 @@ message MTSSelection {
     UF = 0;     // normal selection
     WAYS = 1;   // ways selection (nested UF)
     SYSTEM = 2; // system selection (nested UF/WAYS)
+    UF_CUSTOM_BET = 3; // custom bet selection (nested UF)
   }
 
   SelectionType type = 1;
@@ -59,11 +60,14 @@ message MTSSelection {
   string outcomeID = 7;
   float odds = 8;
 
-  // Nested selections (WAYS and SYSTEM)
+  // Nested selections (WAYS, SYSTEM and UF_CUSTOM_BET)
   repeated MTSSelection selections = 9;
 
   // SYSTEM sizes (multi-system supported): e.g. [3] or [1,2,4]
   repeated int64 size = 10;
+
+  // Consolidated CustomBet odds (only used when type == UF_CUSTOM_BET)
+  float customBetOdds = 11;
 }
 
 
