@@ -4,7 +4,7 @@ module.exports = {
     { name: 'master' },
     { name: 'staging', prerelease: 'staging' },
   ],
-  repositoryUrl: 'https://github.com/zoroplay/mts-v3-service.git',
+  repositoryUrl: 'https://github.com/Sportsbookengine1/mts-v3-service.git',
   tagFormat: 'v${version}',
   plugins: [
     '@semantic-release/commit-analyzer',
