@@ -13,6 +13,7 @@ import com.sportradar.mbs.sdk.entities.odds.Odds;
 import com.sportradar.mbs.sdk.entities.request.TicketRequest;
 import com.sportradar.mbs.sdk.entities.selection.Selection;
 import com.sportradar.mbs.sdk.entities.selection.SystemSelection;
+import com.sportradar.mbs.sdk.entities.selection.UfCustomBetSelection;
 import com.sportradar.mbs.sdk.entities.selection.UfSelection;
 import com.sportradar.mbs.sdk.entities.selection.WaysSelection;
 import com.sportradar.mbs.sdk.entities.stake.Stake;
@@ -228,6 +229,38 @@ public class BetPending implements Runnable {
                         .setSize(sizes);
 
                 return sysb.build();
+            }
+
+            case UF_CUSTOM_BET: {
+                if (node.getSelectionsCount() == 0) {
+                    throw new IllegalArgumentException("UF_CUSTOM_BET requires at least one child selection");
+                }
+
+                List<UfSelection> children = new ArrayList<>();
+                for (int i = 0; i < node.getSelectionsCount(); i++) {
+                    MTSSelection childNode = node.getSelections(i);
+                    if (childNode.getType() != MTSSelection.SelectionType.UF) {
+                        throw new IllegalArgumentException(
+                                "UF_CUSTOM_BET only supports UF child selections, got: " + childNode.getType()
+                        );
+                    }
+                    children.add(toUf(childNode));
+                }
+
+                BigDecimal customBetOdds = new BigDecimal(String.valueOf(node.getOdds()));
+                if (customBetOdds.compareTo(BigDecimal.ZERO) <= 0) {
+                    throw new IllegalArgumentException("UF_CUSTOM_BET requires positive odds");
+                }
+
+                UfCustomBetSelection.Builder customBetBuilder = Selection.newUfCustomBetSelectionBuilder()
+                        .setSelections(children)
+                        .setOdds(
+                                Odds.newDecimalOddsBuilder()
+                                        .setValue(customBetOdds)
+                                        .build()
+                        );
+
+                return customBetBuilder.build();
             }
 
             default:
