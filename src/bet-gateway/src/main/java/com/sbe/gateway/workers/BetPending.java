@@ -247,9 +247,9 @@ public class BetPending implements Runnable {
                     children.add(toUf(childNode));
                 }
 
-                BigDecimal customBetOdds = new BigDecimal(String.valueOf(node.getCustomBetOdds()));
+                BigDecimal customBetOdds = new BigDecimal(String.valueOf(node.getOdds()));
                 if (customBetOdds.compareTo(BigDecimal.ZERO) <= 0) {
-                    throw new IllegalArgumentException("UF_CUSTOM_BET requires positive customBetOdds");
+                    throw new IllegalArgumentException("UF_CUSTOM_BET requires positive odds");
                 }
 
                 UfCustomBetSelection.Builder customBetBuilder = Selection.newUfCustomBetSelectionBuilder()
